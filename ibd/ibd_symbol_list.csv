@@ -1,46 +1,73 @@
-symbol,company
-ANET,Arista Networks
-APH,Amphenol
-ATEYY,Advantest ADR
-ATI,ATI
-CARE,Carter Bankshares
-CRDO,Credo Tech
-DXCM,Dexcom
-ECO,Okeanis Eco Tankers
-ENVA,Enova Intl
-ERO,Ero Copper
-ETON,Eton Pharmaceuticals
-EXPE,Expedia
-FIVE,Five Below
-GH,Guardant Health
-GKOS,Glaukos
-GRMN,Garmin
-HALO,Halozyme Theraptcs
-HNGE,Hinge Health
-KNSA,Kiniksa Pharma
-LGND,Ligand Pharma
-LLY,Eli Lilly
-LQDA,Liquidia
-MGNI,Magnite Inc
-MU,Micron Tech
-NAVN,Navan
-NET,Cloudflare
-NTRA,Natera
-OMDA,Omada Health
-OSCR,Oscar Health
-OUST,Ouster
-RBRK,Rubrik
-RELY,Remitly Global
-SCCO,Southern Copper
-SITM,SiTime
-SN,SharkNinja
-SNOW,Snowflake
-STT,State Street
-TER,Teradyne
-TGTX,TG Therapeutics
-TVTX,Travere Therapeutics
-URGN,Urogen Pharma
-VCTR,Victory Capital
-VIRT,Virtu Financial
-WT,WisdomTree
-ZETA,Zeta Global
+symbol,company,reliable
+ADPT,Adaptive Biotechnologies,0
+AEM,Agnico Eagle Mines,0
+AMD,Advanced Micro Dvcs,0
+ANET,Arista Networks,1
+APH,Amphenol,1
+ARGX,Argenx,0
+ARIS,Aris Mining,0
+ASML,Skyward Specialty Insur,0
+ATEYY,Advantest ADR,1
+ATI,ATI,1
+AU,AngloGold Ashanti,0
+AUGO,Aura Minerals,0
+BURL,Burlington Stores,0
+CARE,Carter Bankshares,1
+CGNX,Cognex,0
+CPAY,Paymentus Holdings Cl A,0
+CRDO,Credo Tech,1
+DXCM,Dexcom,1
+ECO,Okeanis Eco Tankers,1
+ENVA,Enova Intl,1
+ERO,Ero Copper,1
+ETON,Eton Pharmaceuticals,1
+EXPE,Expedia,1
+FIVE,Flywire,0
+FLYW,Corpay,0
+GH,Guardant Health,1
+GKOS,Glaukos,1
+GLBE,Global-e Online,0
+GRMN,Garmin,1
+HALO,Halozyme Theraptcs,1
+HMY,Harmony Gold,0
+HNGE,Hinge Health,1
+HWM,Howmet Aerospace,0
+IAG,Iamgold,0
+IOT,Five Below,0
+KNSA,Kiniksa Pharma,1
+KRYS,Krystal Biotech,0
+LGND,Ligand Pharma,1
+LLY,Eli Lilly,1
+LQDA,Liquidia,1
+MEDP,Medpace,0
+MGNI,Magnite Inc,1
+MS,Morgan Stanley,0
+MU,Micron Tech,1
+NAVN,Navan,1
+NEM,Newmont,0
+NET,Skyward Specialty Insur,0
+NTAP,NetApp,0
+NTRA,Natera,1
+NTRS,SentinelOne,0
+OMDA,Omada Health,1
+OSCR,Oscar Health,1
+OUST,Ouster,1
+PAY,Paymentus Holdings,0
+RBRK,Rubrik,1
+RELY,Remitly Global,1
+SCCO,Southern Copper,1
+SITM,SiTime,1
+SLDE,Slide Insurance Holdings,0
+SN,SharkNinja,1
+SNOW,Snowflake,1
+STT,State Street,1
+TER,Teradyne,1
+TGTX,TG Therapeutics,1
+TVTX,Travere Therapeutics,1
+URGN,Urogen Pharma,1
+VCTR,Victory Capital,1
+VIRT,Virtu Financial,1
+WPM,Wheaton Precious,0
+WT,WisdomTree,1
+XMTR,Xometry,0
+ZETA,Zeta Global,1

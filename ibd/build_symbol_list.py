@@ -1,12 +1,10 @@
 """
-Build ibd_symbol_list.csv from all processed IBD 50 CSVs.
-Columns: symbol, company
+Build ibd_symbol_list.csv — ALL symbols from IBD 50 PDFs.
+Columns: symbol, company, reliable
+  - reliable=1: high confidence (B1 or cross-week consistent pair)
+  - reliable=0: lower confidence (B3/B4 single-week entries)
 
-Strategy:
-- B1 (ranks 1-15): always trusted — LEFT-parsed, correct
-- B3/B4 (ranks 16-50): only add if:
-    a) symbol also appeared in B1 in ANY week (proven correct elsewhere), OR
-    b) symbol appeared in multiple weeks with the SAME company name (consistent pair)
+Adds symbol if not already in list. Keeps first-seen company name.
 """
 import csv, os, re
 
@@ -14,15 +12,13 @@ BASE = r"C:\DolphinShare\IBD\2026\Processed"
 OUT = r"C:\Users\shaowei_l\.openclaw\workspace\ibd\ibd_symbol_list.csv"
 
 def clean_company(raw):
-    # Strip trailing price+metric artifacts and unicode junk chars
     cleaned = re.sub(r'\d+\.\d+\s+\d+\s*$', '', raw).strip()
-    # Remove private-use chars (e.g. \uf07d used as placeholder)
     cleaned = re.sub(r'[\uf07d\ufffd]', '', cleaned).strip()
     return cleaned
 
-# Pass 1: collect all B1 symbols (verified correct pairs)
-b1_symbols = set()  # symbols that appeared in B1
+# Pass 1: collect all entries
 all_entries = []  # (fn, rank, sym, co)
+b1_symbols = set()
 
 for fn in sorted(os.listdir(BASE)):
     if not fn.endswith('.csv'):
@@ -37,46 +33,54 @@ for fn in sorted(os.listdir(BASE)):
             if rank <= 15 and sym and '?' not in sym:
                 b1_symbols.add(sym)
 
-print(f"B1 symbols (verified): {len(b1_symbols)}")
+print(f"B1 verified symbols: {len(b1_symbols)}")
 
-# Pass 2: build symbol list
-# Keep first-seen company for each symbol
-seen = {}
-# Track pairs for cross-week consistency check
-pair_counts = {}  # (sym, co_lower) -> count
-
-for fn, rank, sym, co in sorted(all_entries):
+# Pass 2: count (symbol, company_lower) pairs across weeks
+pair_counts = {}
+for fn, rank, sym, co in all_entries:
     if not sym or '?' in sym:
         continue
     key = (sym, co.lower())
     pair_counts[key] = pair_counts.get(key, 0) + 1
 
+# Pass 3: build symbol list
+seen = {}  # sym -> (co, reliable)
 for fn, rank, sym, co in sorted(all_entries):
-    if not sym or '?' in sym:
-        continue
-    if sym in seen:
+    if not sym or '?' in sym or sym in seen:
         continue
 
     key = (sym, co.lower())
     weeks_with_pair = pair_counts[key]
 
     if rank <= 15:
-        # Always trust B1
-        seen[sym] = co
+        reliable = 1
     elif sym in b1_symbols:
-        # Symbol verified in B1 elsewhere — trust it
-        seen[sym] = co
+        reliable = 1
     elif weeks_with_pair >= 2:
-        # Appeared in multiple weeks with same company — trust it
-        seen[sym] = co
+        reliable = 1
+    else:
+        reliable = 0
+
+    seen[sym] = (co, reliable)
 
 # Write output
-fieldnames = ['symbol', 'company']
+fieldnames = ['symbol', 'company', 'reliable']
 with open(OUT, 'w', encoding='utf-8', errors='replace', newline='') as f:
     writer = csv.DictWriter(f, fieldnames=fieldnames)
     writer.writeheader()
     for sym in sorted(seen):
-        writer.writerow({'symbol': sym, 'company': seen[sym]})
+        co, reliable = seen[sym]
+        writer.writerow({'symbol': sym, 'company': co, 'reliable': reliable})
 
-print(f"Total unique symbols: {len(seen)}")
+reliable_count = sum(1 for _, (_, r) in seen.items() if r == 1)
+print(f"\nTotal unique symbols: {len(seen)}")
+print(f"  Reliable (reliable=1): {reliable_count}")
+print(f"  Unverified (reliable=0): {len(seen) - reliable_count}")
 print(f"Saved -> {OUT}")
+
+# Show unreliable entries
+print("\nUnverified entries (may need manual review):")
+for sym in sorted(seen):
+    co, reliable = seen[sym]
+    if not reliable:
+        print(f"  {sym}: {co}")
