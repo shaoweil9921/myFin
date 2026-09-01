@@ -173,8 +173,13 @@ def parse_left_table(blocks, words, rank_lo, rank_hi):
         # Parse the row
         lines = btext.split('\n')
 
-        # Company: first line, strip leading }
-        company = clean(lines[0])
+        # Company: first line, strip leading } and trailing price/metrics
+        raw_co = clean(lines[0])
+        # Remove trailing price+metric artifacts like "CompanyName63.4799 82"
+        company = re.sub(r'(\d+\.\d+\s+\d+)', '', raw_co).strip()
+        # Fallback: if still looks numeric, take only leading alpha characters
+        if not company or len(company) < 3:
+            company = re.sub(r'\d.*$', '', raw_co).strip()
         if not company or len(company) < 3:
             continue
 
@@ -373,26 +378,35 @@ def process_page(blocks, words, rank_lo=1, rank_hi=50):
             short_notes_all.append((by, btext.strip()))
 
     # ── Step 4: Build results from LEFT rows ────────────────────────────────
-    # LEFT rows are already sorted by rank (parse_left_table assigns ranks in y-order).
-    # RIGHT tiles in each column are sorted by y (top to bottom = rank order within column).
-    # Mapping: row at index i in rank-sorted order →
-    #           column = i % 3, tile at position = i // 3 in that column.
-    # e.g. index 0 (rank 1) -> col 0, tile 0; index 1 (rank 2) -> col 1, tile 0; ...
+    # LEFT rows are sorted by rank.
+    # Column formula: (rank - rank_lo) % 3 — NOT i % 3.
+    # This is correct even when LEFT skips some ranks.
+    # Tile position within column: count of tiles for earlier ranks in same column.
 
     left_sorted = sorted(left_rows, key=lambda r: r['rank'])
+    # Pre-count how many tiles exist per column so we can do positional index
+    col_counts = {c: len(right_tiles_by_col.get(c, [])) for c in [0, 1, 2]}
 
     results = []
-    for i, row in enumerate(left_sorted):
+    for row in left_sorted:
         row_y = row['y']
+        rank = row['rank']
 
-        # Which column and which tile within that column
-        expected_col = i % 3
-        tile_pos = i // 3
+        # Column from rank, NOT from list index
+        expected_col = (rank - rank_lo) % 3
 
-        # Get symbol from the tile at tile_pos in expected_col
-        symbol = ""
+        # Tile position = how many tiles before this rank in the same column
+        # Tiles in col are sorted by y (top=rank_lo, rank_lo+3, rank_lo+6, ...)
         tiles_in_col = right_tiles_by_col.get(expected_col, [])
-        if tile_pos < len(tiles_in_col):
+        tile_pos = 0
+        # Each tile in this column corresponds to ranks: rank_lo+2, rank_lo+5, rank_lo+8...
+        # i.e., rank = rank_lo + 2 + 3*tile_index (since ranks 16,19,22,25,28 are in col 1 for B3)
+        # General: rank = rank_lo + offset + 3*i where offset = col
+        # So i = (rank - rank_lo - col) / 3
+        tile_pos = (rank - rank_lo - expected_col) // 3
+
+        symbol = ""
+        if 0 <= tile_pos < len(tiles_in_col):
             symbol = tiles_in_col[tile_pos][1]
 
         # Short note: closest by y (any column)
