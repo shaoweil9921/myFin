@@ -7,27 +7,29 @@ OpenClaw-integrated Discord bot for trading research and alerts.
 - **Bot Name:** myTrading
 - **Platform:** Discord (OpenClaw Gateway)
 - **Repo:** https://github.com/shaoweil9921/myTrading
+- **Bot Token:** stored in Windows env var `DISCORD_BOT_TOKEN`
+- **Server ID:** `1158828571687669800`
+- **Bot User ID:** `MTU1MDg3NzM5MDkyNDgxMjM1OA.GLLA2Q...`
 
-## Setup
+## OpenClaw Config
 
-### Discord Developer Portal
-1. Create app: https://discord.com/developers/applications
-2. Bot name: `myTrading`
-3. Enable: Message Content Intent, Server Members Intent
-4. OAuth2: Add bot to server with `bot` + `applications.commands` scopes
+Added to `~/.openclaw/openclaw.json`:
 
-### OpenClaw Config
-```json5
+```json
 {
-  channels: {
-    discord: {
-      enabled: true,
-      token: { source: "env", provider: "default", id: "DISCORD_BOT_TOKEN" },
-      groupPolicy: "allowlist",
-      guilds: {
-        "YOUR_SERVER_ID": {
-          requireMention: false,
-          users: ["YOUR_USER_ID"]
+  "channels": {
+    "discord": {
+      "enabled": true,
+      "token": {
+        "source": "env",
+        "provider": "default",
+        "id": "DISCORD_BOT_TOKEN"
+      },
+      "groupPolicy": "allowlist",
+      "guilds": {
+        "1158828571687669800": {
+          "requireMention": false,
+          "users": ["805480702890999859"]
         }
       }
     }
@@ -36,12 +38,21 @@ OpenClaw-integrated Discord bot for trading research and alerts.
 ```
 
 ## Environment Variables
-```
-DISCORD_BOT_TOKEN=your_bot_token_here
-```
+
+| Variable | Value |
+|----------|-------|
+| `DISCORD_BOT_TOKEN` | Bot token from Discord Developer Portal |
+
+## Setup Steps Completed
+
+1. ✅ Discord application created (myTrading)
+2. ✅ Bot token generated
+3. ✅ Privileged intents enabled (Message Content, Server Members)
+4. ✅ OpenClaw config updated
+5. ✅ Gateway restarted
 
 ## Features
-- [ ] Trading alerts
+- [ ] Read trading signals from subscribed server
 - [ ] Stock research commands
 - [ ] Watchlist monitoring
 - [ ] Schaeffer's letter tracking
