@@ -142,8 +142,23 @@ def extract_tickers(text: str):
         'HIGH', 'LOW', 'NEWS', 'CALL', 'PUT', 'OPEN', 'CLOSE',
         'STOP', 'NEXT', 'THIS', 'THAT', 'WITH', 'FROM', 'HAVE',
         'MORE', 'THAN', 'INTO', 'YEAR', 'MOST', 'JUST', 'OVER',
+        'GOOGL', 'GOOG', 'AMZN', 'META', 'TSLA', 'NVDA',  # common base symbols
     }
-    return [t for t in matches if t not in common_words]
+
+    # Filter out tickers that appear ONLY in parenthetical explanations like "(lev ticker on GOOGL)"
+    # These are base/underlying symbols, not tradeable signals
+    filtered = []
+    for t in matches:
+        if t in common_words:
+            continue
+        # Check if ticker appears in a parenthetical clause describing another ticker
+        # e.g. "GGLL (lev ticker on GOOGL)" - GOOGL is described as the underlying
+        parenthetical_tickers = re.findall(r'\(([^)]*)\b(' + t + r')\b[^)]*\)', text)
+        if parenthetical_tickers:
+            continue  # skip tickers that only appear in parentheticals as the base
+        filtered.append(t)
+
+    return filtered
 
 
 def extract_price(text: str, pattern: re.Pattern) -> Optional[float]:
