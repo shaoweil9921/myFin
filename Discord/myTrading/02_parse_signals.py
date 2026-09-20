@@ -222,12 +222,12 @@ def detect_asset_class(text):
 def parse_msg(msg_row, conn):
     """
     Parse ONE discord_message row -> list of discord_trade_signal dicts.
-    msg_row: (internal_pk, channel_fk, message_timestamp, author_username, author_posted_at, content)
+    msg_row: (internal_pk, channel_fk, account_id, message_timestamp, author_username, author_posted_at, content)
     """
     if not msg_row:
         return []
 
-    msg_pk, channel_fk, msg_ts, author_username, author_posted_at, content = msg_row
+    msg_pk, channel_fk, account_id, msg_ts, author_username, author_posted_at, content = msg_row
     if not content:
         return []
 
@@ -408,9 +408,10 @@ def fetch_messages(conn, channel_id=None, limit=500):
     cur = conn.cursor()
     if channel_id:
         cur.execute("""
-            SELECT m.id, m.channel_id, m.message_timestamp,
+            SELECT m.id, m.channel_id, c.account_id, m.message_timestamp,
                    m.author_username, m.author_posted_at, m.content
             FROM discord_message m
+            JOIN discord_channel c ON c.id = m.channel_id
             WHERE m.channel_id = %s
               AND NOT EXISTS (
                   SELECT 1 FROM discord_trade_signal s
@@ -423,9 +424,10 @@ def fetch_messages(conn, channel_id=None, limit=500):
         """, (channel_id, limit))
     else:
         cur.execute("""
-            SELECT m.id, m.channel_id, m.message_timestamp,
+            SELECT m.id, m.channel_id, c.account_id, m.message_timestamp,
                    m.author_username, m.author_posted_at, m.content
             FROM discord_message m
+            JOIN discord_channel c ON c.id = m.channel_id
             WHERE NOT EXISTS (
                 SELECT 1 FROM discord_trade_signal s
                 WHERE s.channel_id = m.channel_id
