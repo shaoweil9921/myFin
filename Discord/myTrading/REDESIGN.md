@@ -77,6 +77,7 @@ Raw messages fetched from Discord.
 | `has_bot_mention` | BOOLEAN DEFAULT FALSE | |
 | `edited_at` | TIMESTAMPTZ | |
 | `message_timestamp` | TIMESTAMPTZ | Discord timestamp |
+| `author_posted_at` | TIMESTAMPTZ | author's embedded timestamp from message content (e.g. "TradingWithAshley — 9/14/2026 3:24 PM") |
 | `created_at` | TIMESTAMPTZ DEFAULT NOW() | |
 
 **Constraints:** `UNIQUE(channel_id, message_id)`
@@ -136,7 +137,7 @@ Extracted trade signals — supports both **stock/ETF** and **options** trades.
 
 | Column | Type | Notes |
 |--------|------|-------|
-| `underlying_ticker` | VARCHAR(10) | e.g. AAPL (for the option) |
+| `stock_ticker` | VARCHAR(10) | e.g. AAPL (the underlying) |
 | `option_type` | VARCHAR(4) | CALL or PUT |
 | `expiration_date` | DATE | option expiry |
 | `strike_price` | NUMERIC(12,4) | strike |
@@ -152,6 +153,8 @@ Extracted trade signals — supports both **stock/ETF** and **options** trades.
 | `bid_ask_spread` | NUMERIC(8,4) | observed spread at entry |
 | `delta` | NUMERIC(6,4) | theoretical delta at entry (optional) |
 | `delta_target` | NUMERIC(6,4) | target delta for exit |
+| `premium_price` | NUMERIC(12,4) | actual premium paid per share (code sets this alongside `entry_premium`) |
+| `strategy_type` | VARCHAR(50) | e.g. Covered Call, SWEEP, Iron Condor |
 
 ### Position tracking
 | Column | Type | Notes |
@@ -174,7 +177,7 @@ Extracted trade signals — supports both **stock/ETF** and **options** trades.
 - `UNIQUE(signal_id)`
 - `idx_signal_account`
 - `idx_signal_channel`
-- `idx_signal_ticker` — `stock_ticker` or `underlying_ticker`
+- `idx_signal_ticker` — `stock_ticker`
 - `idx_signal_date DESC`
 - `idx_signal_status`
 - `idx_signal_confidence`
