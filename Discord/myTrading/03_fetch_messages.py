@@ -1,6 +1,7 @@
 """03_fetch_messages.py - Fetch new Discord messages for tracked channels"""
 import os
 import sys
+import re
 import json
 import time
 import requests
@@ -87,6 +88,18 @@ def parse_message(msg):
     embeds  = msg.get('embeds', [])
 
     content = msg.get('content', '')
+
+    # Extract author's embedded post time before cleaning
+    author_posted_at = parse_author_timestamp(content)
+
+    has_mentions    = len(mentions) > 0
+    has_bot_mention = any(m.get('bot', False) for m in mentions)
+    """Normalize a Discord message dict into a flat dict."""
+    author = msg.get('author', {})
+    mentions = msg.get('mentions', [])
+    embeds  = msg.get('embeds', [])
+
+    content = msg.get('content', '')
     has_mentions    = len(mentions) > 0
     has_bot_mention = any(m.get('bot', False) for m in mentions)
 
@@ -159,7 +172,6 @@ def parse_message(msg):
 def clean_text(text):
     if not text:
         return ""
-    import re
     text = re.sub(r'<@!?\d+>', '', text)
     text = re.sub(r'<#\d+>', '', text)
     text = re.sub(r'<@&\d+>', '', text)
@@ -170,6 +182,52 @@ def clean_text(text):
     text = re.sub(r'~~+', '', text)
     text = re.sub(r'\n+', ' ', text)
     return text.strip()
+
+
+_AUTHOR_TS_PAT = re.compile(
+    # Captures: username (everything before first digit), date, time, AM/PM
+    r'^(.+?)\s+(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})\s+(\d{1,2}:\d{2})\s*(AM|PM|am|pm)',
+    re.UNICODE
+)
+_Month_MAP = {
+    'jan': 1, 'january': 1, 'feb': 2, 'february': 2, 'mar': 3, 'march': 3,
+    'apr': 4, 'april': 4, 'may': 5, 'jun': 6, 'june': 6,
+    'jul': 7, 'july': 7, 'aug': 8, 'august': 8, 'sep': 9, 'sept': 9, 'september': 9,
+    'oct': 10, 'october': 10, 'nov': 11, 'november': 11, 'dec': 12, 'december': 12,
+}
+
+
+def parse_author_timestamp(content):
+    """Extract author-posted timestamp from first line like:
+    'TradingWithAshley — 9/14/2026 11:20 AM'
+    Returns naive datetime in ET, or None."""
+    if not content:
+        return None
+    line1 = content.split('\n', 1)[0].strip()
+    m = _AUTHOR_TS_PAT.match(line1)
+    if not m:
+        return None
+    date_str, time_str = m.group(2), m.group(3)
+    ampm = m.group(4).upper()
+
+    # Parse date
+    for fmt in ('%m/%d/%Y', '%m/%d/%y', '%m-%d-%Y', '%m-%d-%y'):
+        try:
+            dt = datetime.strptime(date_str, fmt)
+            break
+        except ValueError:
+            continue
+    else:
+        return None
+
+    # Parse time
+    try:
+        t = datetime.strptime(f"{time_str} {ampm}", '%I:%M %p').time()
+    except ValueError:
+        return None
+
+    # Combine in ET (naive — tz applied at storage level)
+    return datetime(dt.year, dt.month, dt.day, t.hour, t.minute, t.second)
 
 
 def save_messages(conn, channel_db_id, channel_discord_id, messages):
@@ -195,7 +253,7 @@ def save_messages(conn, channel_db_id, channel_discord_id, messages):
                 attachments, reactions,
                 thread_id, thread_name, reply_to_message_id,
                 is_pinned, message_type, has_mentions, has_bot_mention,
-                edited_at, message_timestamp, raw_json
+                edited_at, message_timestamp, author_posted_at, raw_json
             ) VALUES (
                 %s, %s, %s, %s,
                 %s, %s,
@@ -203,12 +261,13 @@ def save_messages(conn, channel_db_id, channel_discord_id, messages):
                 %s, %s,
                 %s, %s, %s,
                 %s, %s, %s, %s,
-                %s, %s, %s
+                %s, %s, %s, %s
             )
             ON CONFLICT (channel_id, message_id) DO UPDATE SET
                 content = EXCLUDED.content,
                 cleaned_content = EXCLUDED.cleaned_content,
                 edited_at = EXCLUDED.edited_at,
+                author_posted_at = EXCLUDED.author_posted_at,
                 raw_json = EXCLUDED.raw_json
         """, (
             channel_db_id,
@@ -232,6 +291,7 @@ def save_messages(conn, channel_db_id, channel_discord_id, messages):
             parsed['has_bot_mention'],
             parsed['edited_at'],
             parsed['message_timestamp'],
+            parsed.get('author_posted_at'),
             json.dumps(parsed['raw_json']),
         ))
         saved += 1

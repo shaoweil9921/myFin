@@ -94,6 +94,7 @@ def create_tables(conn):
             has_bot_mention BOOLEAN DEFAULT FALSE,
             edited_at TIMESTAMPTZ,
             message_timestamp TIMESTAMPTZ,
+            author_posted_at TIMESTAMPTZ,
             raw_json JSONB,
             created_at TIMESTAMPTZ DEFAULT NOW(),
             UNIQUE(channel_id, message_id)

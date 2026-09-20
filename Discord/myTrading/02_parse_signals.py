@@ -44,7 +44,7 @@ _STOP_RE    = _price_pat('stop', 'stoploss', 'stop loss', 'sl', 'stopped')
 
 # Option patterns
 STRIKE_RE = re.compile(
-    r'\b([0-9,]+\.?[0-9]*)\s*(?:strike|strike price|call|put)\b',
+    r'(?:strike|strike price)\s*[:\s]*\$?([0-9,]+\.?[0-9]*)',
     re.IGNORECASE
 )
 EXPIRY_RE = re.compile(
@@ -56,7 +56,7 @@ CONTRACT_RE = re.compile(
     re.IGNORECASE
 )
 PREMIUM_RE = re.compile(
-    r'(?:premium|paid|cost|price)\s*[:\s]*\$?([0-9,]+\.?[0-9]*)',
+    r'(?:premium|paid|cost|price)\s*[:\s]*\$?([0-9]*\.?[0-9]+)',
     re.IGNORECASE
 )
 CALL_RE = re.compile(r'\bcall\b', re.IGNORECASE)
@@ -84,6 +84,7 @@ COMMON_WORDS = {
     'CLOSE', 'STOP', 'NEXT', 'THIS', 'THAT', 'WITH', 'FROM', 'HAVE', 'MORE',
     'THAN', 'INTO', 'YEAR', 'MOST', 'JUST', 'OVER', 'ALSO', 'SOME', 'LIKE',
     'GOOGL', 'GOOG', 'AMZN', 'META', 'TSLA', 'NVDA', 'MSFT', 'AAPL',
+    'AM', 'PM',  # times of day - not tickers
 }
 
 
@@ -134,8 +135,8 @@ def extract_tickers(text):
     matches = TICKER_RE.findall(text)
     filtered = []
     for t in matches:
-        if t in COMMON_WORDS:
-            continue
+        if t in COMMON_WORDS or len(t) < 3:
+            continue  # skip 2-letter acronyms and year-like 2-digit strings
         # Skip if ticker appears ONLY in a parenthetical base/underlying explanation
         # e.g. "GGLL (lev ticker on GOOGL)" -> skip GOOGL
         pat = re.compile(
@@ -216,12 +217,12 @@ def detect_asset_class(text):
 def parse_msg(msg_row, conn):
     """
     Parse ONE discord_message row -> list of discord_trade_signal dicts.
-    msg_row: (id, channel_id, message_timestamp, author_username, content, raw_json)
+    msg_row: (internal_pk, channel_fk, message_timestamp, author_username, author_posted_at, content)
     """
     if not msg_row:
         return []
 
-    msg_id, channel_id, msg_ts, author_username, content, raw_json = msg_row
+    msg_pk, channel_fk, msg_ts, author_username, author_posted_at, content = msg_row
     if not content:
         return []
 
@@ -230,31 +231,29 @@ def parse_msg(msg_row, conn):
     if not tickers:
         return []
 
-    # Determine signal_date
-    if msg_ts:
-        if isinstance(msg_ts, str):
+    # Determine signal_date — prefer author's embedded timestamp over Discord server timestamp
+    ts_for_date = author_posted_at if author_posted_at else msg_ts
+    if ts_for_date:
+        if isinstance(ts_for_date, str):
             try:
-                signal_date = datetime.fromisoformat(msg_ts.replace('Z', '+00:00')).date()
+                signal_date = datetime.fromisoformat(ts_for_date.replace('Z', '+00:00')).date()
             except ValueError:
                 signal_date = date.today()
-        elif isinstance(msg_ts, datetime):
-            signal_date = msg_ts.date()
+        elif isinstance(ts_for_date, datetime):
+            signal_date = ts_for_date.date()
         else:
             signal_date = date.today()
     else:
         signal_date = date.today()
 
-    # Get account_id and channel_id FK from DB
+    # Get account_id
     cur = conn.cursor()
-    cur.execute(
-        "SELECT account_id, channel_id FROM discord_message WHERE id = %s",
-        (msg_id,)
-    )
+    cur.execute("SELECT account_id FROM discord_channel WHERE id = %s", (channel_fk,))
     row = cur.fetchone()
     cur.close()
     if not row:
         return []
-    account_id, ch_fk = row
+    account_id = row[0]
 
     entry_price  = extract_price(cleaned, _ENTRY_RE)
     target_price = extract_price(cleaned, _TARGET_RE)
@@ -285,8 +284,7 @@ def parse_msg(msg_row, conn):
     for ticker in tickers[:3]:
         sig = {
             'account_id':      account_id,
-            'channel_id':      ch_fk,
-            'message_id':      msg_id,
+            'channel_id':      channel_fk,
             'signal_id':       str(uuid.uuid4()),
             'asset_class':    asset_class,
             'signal_status':   'ACTIVE',
@@ -390,7 +388,7 @@ def fetch_messages(conn, channel_id=None, limit=500):
     if channel_id:
         cur.execute("""
             SELECT m.id, m.channel_id, m.message_timestamp,
-                   m.author_username, m.content, m.raw_json
+                   m.author_username, m.author_posted_at, m.content
             FROM discord_message m
             LEFT JOIN discord_trade_signal s ON s.message_id = m.id
             WHERE m.channel_id = %s
@@ -402,7 +400,7 @@ def fetch_messages(conn, channel_id=None, limit=500):
     else:
         cur.execute("""
             SELECT m.id, m.channel_id, m.message_timestamp,
-                   m.author_username, m.content, m.raw_json
+                   m.author_username, m.author_posted_at, m.content
             FROM discord_message m
             LEFT JOIN discord_trade_signal s ON s.message_id = m.id
             WHERE s.id IS NULL
