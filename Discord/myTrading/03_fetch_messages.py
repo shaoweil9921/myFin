@@ -247,7 +247,7 @@ def save_messages(conn, channel_db_id, account_id, channel_discord_id, messages)
         # Upsert message
         cur.execute("""
             INSERT INTO discord_message (
-                channel_id, account_id, message_id, author_id, author_username,
+                account_id, channel_id, message_id, author_id, author_username,
                 content, cleaned_content,
                 embed_titles, embed_descriptions, embed_urls, embed_images,
                 attachments, reactions,
@@ -270,8 +270,8 @@ def save_messages(conn, channel_db_id, account_id, channel_discord_id, messages)
                 author_posted_at = EXCLUDED.author_posted_at,
                 raw_json = EXCLUDED.raw_json
         """, (
-            channel_db_id,
             account_id,
+            channel_db_id,
             parsed['message_id'],
             parsed['author_id'],
             parsed['author_username'],
