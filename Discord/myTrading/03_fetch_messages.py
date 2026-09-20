@@ -230,7 +230,7 @@ def parse_author_timestamp(content):
     return datetime(dt.year, dt.month, dt.day, t.hour, t.minute, t.second)
 
 
-def save_messages(conn, channel_db_id, channel_discord_id, messages):
+def save_messages(conn, channel_db_id, account_id, channel_discord_id, messages):
     """Save messages to discord_message, update cursor."""
     if not messages:
         return 0
@@ -247,7 +247,7 @@ def save_messages(conn, channel_db_id, channel_discord_id, messages):
         # Upsert message
         cur.execute("""
             INSERT INTO discord_message (
-                channel_id, message_id, author_id, author_username,
+                channel_id, account_id, message_id, author_id, author_username,
                 content, cleaned_content,
                 embed_titles, embed_descriptions, embed_urls, embed_images,
                 attachments, reactions,
@@ -271,6 +271,7 @@ def save_messages(conn, channel_db_id, channel_discord_id, messages):
                 raw_json = EXCLUDED.raw_json
         """, (
             channel_db_id,
+            account_id,
             parsed['message_id'],
             parsed['author_id'],
             parsed['author_username'],
@@ -313,7 +314,7 @@ def save_messages(conn, channel_db_id, channel_discord_id, messages):
 
 def fetch_channel(conn, channel_row):
     """Fetch new messages for one channel."""
-    ch_db_id, ch_discord_id, ch_name, last_msg_id = channel_row
+    ch_db_id, ch_discord_id, ch_name, last_msg_id, account_id = channel_row
 
     messages = fetch_channel_messages(ch_discord_id, before_msg_id=last_msg_id)
     if messages is None:
@@ -323,7 +324,7 @@ def fetch_channel(conn, channel_row):
         return 0
 
     # Discord returns newest first; save in that order
-    saved = save_messages(conn, ch_db_id, ch_discord_id, messages)
+    saved = save_messages(conn, ch_db_id, account_id, ch_discord_id, messages)
     return saved
 
 
