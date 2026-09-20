@@ -311,7 +311,7 @@ def parse_msg(msg_row, conn):
 
         # Options fields
         if asset_class == 'OPTION':
-            sig['underlying_ticker'] = ticker.upper()
+            sig['stock_ticker'] = ticker.upper()
             sig['option_type'] = 'CALL' if CALL_RE.search(cleaned) else 'PUT' if PUT_RE.search(cleaned) else None
             sig['expiration_date'] = parse_expiry(cleaned, signal_date)
 
@@ -355,7 +355,7 @@ def parse_msg(msg_row, conn):
                     except ZeroDivisionError:
                         pass
         else:
-            sig['underlying_ticker'] = None
+            sig['stock_ticker'] = None
             sig['option_type'] = None
             sig['expiration_date'] = None
 
@@ -475,7 +475,7 @@ def main():
     if args.dry_run:
         print("\n=== DRY RUN ===\n")
         for s in all_signals:
-            print(f"  [{s['asset_class']}] {s.get('stock_ticker') or s.get('underlying_ticker')} | "
+            print(f"  [{s['asset_class']}] {s.get('stock_ticker')} | "
                   f"Dir:{s['trade_direction'] or s.get('option_type')} | "
                   f"Entry:${s['entry_price']} Target:${s['target_price']} Stop:${s['stop_loss']} | "
                   f"RR:{s['risk_reward_ratio'] or s.get('risk_reward_ratio_opt')} | "
@@ -489,7 +489,7 @@ def main():
     inserted = skipped = 0
     for sig in all_signals:
         if insert_signal(conn, sig):
-            t = sig.get('stock_ticker') or sig.get('underlying_ticker')
+            t = sig.get('stock_ticker')
             print(f"  [INSERT] {sig['asset_class']} {t} | Entry:${sig['entry_price']} "
                   f"Target:${sig['target_price']} Stop:${sig['stop_loss']} | "
                   f"RR:{sig['risk_reward_ratio'] or sig.get('risk_reward_ratio_opt')} | "
@@ -504,7 +504,7 @@ def main():
     cur = conn.cursor()
     cur.execute("""
         SELECT signal_id, asset_class,
-               COALESCE(stock_ticker, underlying_ticker) as ticker,
+               stock_ticker as ticker,
                trade_direction, option_type,
                entry_price, target_price, stop_loss,
                risk_reward_ratio, confidence, signal_date, signal_status
