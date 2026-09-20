@@ -146,6 +146,8 @@ def create_tables(conn):
             bid_ask_spread NUMERIC(8,4),
             delta NUMERIC(6,4),
             delta_target NUMERIC(6,4),
+            premium_price NUMERIC(12,4),
+            strategy_type VARCHAR(50),
             exit_price NUMERIC(12,4),
             exit_date DATE,
             realized_pnl NUMERIC(14,2),

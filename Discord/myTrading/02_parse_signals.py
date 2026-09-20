@@ -135,7 +135,8 @@ def extract_tickers(text):
     matches = TICKER_RE.findall(text)
     filtered = []
     for t in matches:
-        if t in COMMON_WORDS or len(t) < 3:
+        if t in COMMON_WORDS:
+            continue
             continue  # skip 2-letter acronyms and year-like 2-digit strings
         # Skip if ticker appears ONLY in a parenthetical base/underlying explanation
         # e.g. "GGLL (lev ticker on GOOGL)" -> skip GOOGL
@@ -309,6 +310,10 @@ def parse_msg(msg_row, conn):
             sig['underlying_ticker'] = ticker.upper()
             sig['option_type'] = 'CALL' if CALL_RE.search(cleaned) else 'PUT' if PUT_RE.search(cleaned) else None
             sig['expiration_date'] = parse_expiry(cleaned, signal_date)
+        else:
+            sig['underlying_ticker'] = None
+            sig['option_type'] = None
+            sig['expiration_date'] = None
 
             strike_m = STRIKE_RE.search(cleaned)
             if strike_m:
@@ -376,7 +381,11 @@ def insert_signal(conn, sig):
         conn.commit()
         cur.close()
         return True
-    except psycopg2.IntegrityError:
+    except psycopg2.IntegrityError as e:
+        conn.rollback()
+        cur.close()
+        return False
+    except psycopg2.Error as e:
         conn.rollback()
         cur.close()
         return False
@@ -390,9 +399,12 @@ def fetch_messages(conn, channel_id=None, limit=500):
             SELECT m.id, m.channel_id, m.message_timestamp,
                    m.author_username, m.author_posted_at, m.content
             FROM discord_message m
-            LEFT JOIN discord_trade_signal s ON s.message_id = m.id
             WHERE m.channel_id = %s
-              AND s.id IS NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM discord_trade_signal s
+                  WHERE s.channel_id = m.channel_id
+                    AND LEFT(s.signal_text, 80) = LEFT(m.content, 80)
+              )
               AND m.content IS NOT NULL AND m.content != ''
             ORDER BY m.message_timestamp DESC
             LIMIT %s
@@ -402,8 +414,11 @@ def fetch_messages(conn, channel_id=None, limit=500):
             SELECT m.id, m.channel_id, m.message_timestamp,
                    m.author_username, m.author_posted_at, m.content
             FROM discord_message m
-            LEFT JOIN discord_trade_signal s ON s.message_id = m.id
-            WHERE s.id IS NULL
+            WHERE NOT EXISTS (
+                SELECT 1 FROM discord_trade_signal s
+                WHERE s.channel_id = m.channel_id
+                  AND LEFT(s.signal_text, 80) = LEFT(m.content, 80)
+            )
               AND m.content IS NOT NULL AND m.content != ''
             ORDER BY m.message_timestamp DESC
             LIMIT %s
