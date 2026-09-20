@@ -51,6 +51,10 @@ EXPIRY_RE = re.compile(
     r'(?:exp(?:iry|iration)?|expires?|by)\s*[:.\s]*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})',
     re.IGNORECASE
 )
+STRATEGY_LINE_RE = re.compile(
+    r'^strategy\s*[:\s]*(.+?)\s*$',
+    re.MULTILINE | re.IGNORECASE
+)
 CONTRACT_RE = re.compile(
     r'(\d+)\s*(?:contract|contracts|opts?|options?)\b',
     re.IGNORECASE
@@ -310,10 +314,11 @@ def parse_msg(msg_row, conn):
             sig['underlying_ticker'] = ticker.upper()
             sig['option_type'] = 'CALL' if CALL_RE.search(cleaned) else 'PUT' if PUT_RE.search(cleaned) else None
             sig['expiration_date'] = parse_expiry(cleaned, signal_date)
-        else:
-            sig['underlying_ticker'] = None
-            sig['option_type'] = None
-            sig['expiration_date'] = None
+
+            # Parse strategy line (e.g. "Strategy: Covered Call")
+            strat_m = STRATEGY_LINE_RE.search(content)
+            if strat_m:
+                sig['strategy_type'] = strat_m.group(1).strip()
 
             strike_m = STRIKE_RE.search(cleaned)
             if strike_m:
@@ -332,8 +337,8 @@ def parse_msg(msg_row, conn):
             premium = extract_price(cleaned, PREMIUM_RE)
             if premium:
                 sig['entry_premium'] = premium
+                sig['premium_price'] = premium  # column name maps to premium_price in DB
                 sig['entry_premium_approx'] = is_approx(cleaned, premium)
-                # Compute target/stop on premium
                 t_pct = target_pct or 50
                 s_pct = stop_pct or 25
                 if sig['option_type'] == 'CALL':
@@ -349,6 +354,10 @@ def parse_msg(msg_row, conn):
                         sig['risk_reward_ratio_opt'] = round(t_pct / s_pct, 2)
                     except ZeroDivisionError:
                         pass
+        else:
+            sig['underlying_ticker'] = None
+            sig['option_type'] = None
+            sig['expiration_date'] = None
 
         signals.append(sig)
     return signals
@@ -373,6 +382,9 @@ def insert_signal(conn, sig):
             entry_price = EXCLUDED.entry_price,
             target_price = EXCLUDED.target_price,
             stop_loss = EXCLUDED.stop_loss,
+            strike_price = EXCLUDED.strike_price,
+            premium_price = EXCLUDED.premium_price,
+            strategy_type = EXCLUDED.strategy_type,
             updated_at = NOW()
     """
     cur = conn.cursor()
