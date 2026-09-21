@@ -173,6 +173,7 @@ def extract_strategy(text):
     d = text.lower()
     if 'swing' in d:          return 'SWING'
     if 'day trade' in d or 'daytrade' in d: return 'DAY_TRADE'
+    if re.search(r'\bleaps?\b', d):       return 'LEAPS'
     if re.search(r'\bcall\b', d) and re.search(r'\$[\d.]+', text): return 'OPTIONS_CALL'
     if re.search(r'\bput\b', d)  and re.search(r'\$[\d.]+', text): return 'OPTIONS_PUT'
     if 'scalp' in d:          return 'SCALP'
@@ -316,13 +317,22 @@ def parse_msg(msg_row, conn):
         # Options fields
         if asset_class == 'OPTION':
             sig['stock_ticker'] = ticker.upper()
-            sig['option_type'] = 'CALL' if CALL_RE.search(cleaned) else 'PUT' if PUT_RE.search(cleaned) else None
             sig['expiration_date'] = parse_expiry(cleaned, signal_date)
 
             # Parse strategy line (e.g. "Strategy: Covered Call")
             strat_m = STRATEGY_LINE_RE.search(content)
             if strat_m:
                 sig['strategy_type'] = strat_m.group(1).strip()
+
+            # Infer option_type from direction keyword or LEAPS default
+            if CALL_RE.search(cleaned):
+                sig['option_type'] = 'CALL'
+            elif PUT_RE.search(cleaned):
+                sig['option_type'] = 'PUT'
+            elif sig.get('strategy_type') and re.search(r'\bleaps?\b', sig['strategy_type'], re.IGNORECASE):
+                sig['option_type'] = 'CALL'  # LEAPS are typically calls
+            else:
+                sig['option_type'] = None
 
             strike_m = STRIKE_RE.search(cleaned)
             if strike_m:
@@ -353,7 +363,7 @@ def parse_msg(msg_row, conn):
                     sig['stop_premium']   = round(premium * (1 - s_pct/100), 4) if premium else None
                 sig['target_pct_opt'] = t_pct
                 sig['stop_pct_opt']   = s_pct
-                if sig['target_premium'] and sig['stop_premium'] and s_pct > 0:
+                if sig.get('target_premium') and sig.get('stop_premium') and s_pct > 0:
                     try:
                         sig['risk_reward_ratio_opt'] = round(t_pct / s_pct, 2)
                     except ZeroDivisionError:
@@ -363,8 +373,11 @@ def parse_msg(msg_row, conn):
             sig['expiration_date'] = None
 
         # Only emit signal if it has all required fields
+        is_leaps = sig.get('strategy_type') and re.search(r'\bleaps?\b', sig.get('strategy_type', ''), re.IGNORECASE)
         if asset_class == 'OPTION':
-            if not (sig.get('option_type') and sig.get('strike_price') and sig.get('expiration_date')):
+            if not (sig.get('option_type') or is_leaps):
+                continue
+            if not (sig.get('strike_price') and sig.get('expiration_date')):
                 continue
         else:  # STOCK/ETF
             if not (sig.get('entry_price') and sig.get('trade_direction')):

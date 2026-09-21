@@ -1,7 +1,5 @@
 # Discord Trading Signal Pipeline
 
-## Overview
-
 Fetches Discord messages from tracked channels, parses trading signals, and stores them in PostgreSQL (`fintech` database).
 
 ## Scripts
@@ -36,63 +34,38 @@ python 02_parse_signals.py --dry-run
 python test_pipeline.py
 ```
 
-## Database Schema
+## Message Format Requirement
 
-### discord_message
-Stores raw Discord messages.
+Messages **must** have a `TradingWithAshley` header to be parsed:
 
-| Column | Type | Notes |
-|--------|------|-------|
-| id | SERIAL | Internal PK |
-| message_id | VARCHAR | Discord snowflake ID |
-| channel_id | INT FK | -> discord_channel.id |
-| author_id | VARCHAR | Discord user ID |
-| author_username | VARCHAR | |
-| content | TEXT | Raw message content |
-| cleaned_content | TEXT | Discord markup stripped |
-| embed_urls | JSONB | Array of URL strings |
-| embed_images | JSONB | Array of image URL strings |
-| attachments | JSONB | Array of attachment objects |
-| message_timestamp | TIMESTAMPTZ | Discord server timestamp |
-| author_posted_at | DATE | Parsed from content (e.g. "9/15/2026") |
-| local_image_path | JSONB or TEXT | Array of local file paths |
-| is_parsed | BOOLEAN | Whether signal was parsed |
+```
+TradingWithAshley — 9/15/2026 10:38 AM
+Ticker: MU
+Strategy: Covered Call
+Expiration: 9/18/26
+Strike: 1000
+Premium: $2.72
+```
 
-### discord_trade_signal
-Stores parsed trade signals.
-
-| Column | Type | Notes |
-|--------|------|-------|
-| id | SERIAL | Internal PK |
-| signal_id | UUID | Unique identifier |
-| message_id | INT FK | -> discord_message.id |
-| channel_id | INT FK | -> discord_channel.id |
-| stock_ticker | VARCHAR | e.g. "MU", "SPY" |
-| asset_class | VARCHAR | STOCK, OPTION, ETF, etc. |
-| option_type | VARCHAR | CALL or PUT |
-| strike_price | NUMERIC | e.g. 130.00 |
-| expiration_date | DATE | Option expiry |
-| entry_premium | NUMERIC | Price paid for option |
-| trade_direction | VARCHAR | LONG or SHORT |
-| entry_price | NUMERIC | Stock entry price |
-| target_price | NUMERIC | |
-| stop_loss | NUMERIC | |
-| signal_status | VARCHAR | ACTIVE, CLOSED, CANCELLED |
-| signal_date | DATE | Trade date |
-| confidence | VARCHAR | HIGH, MEDIUM, LOW |
+The parser extracts `author_posted_at` from this header (e.g. `9/15/2026 10:38 AM`) and uses it as `signal_date`. Messages without this header are fetched and saved to DB but will not generate signals.
 
 ## Signal Validation Rules
 
-A message only generates a signal if:
+A message only generates a signal if it passes the header check AND:
 
 **Options** — ALL required:
-- `option_type` — CALL or PUT
+- `option_type` — CALL, PUT, or inferred from strategy (LEAPS defaults to CALL)
 - `strike_price` — numeric strike
 - `expiration_date` — parsed expiry date
 
 **Stocks/ETF** — ALL required:
 - `entry_price` — numeric purchase price
 - `trade_direction` — LONG or SHORT
+
+**LEAPS** — Special case:
+- `strategy_type` containing "LEAP" or "LEAPS" is recognized as `OPTION` asset class
+- `option_type` defaults to `CALL` (LEAPS are typically long-dated calls)
+- Still requires `strike_price` and `expiration_date`
 
 ## Parser Behavior
 
@@ -107,6 +80,43 @@ A message only generates a signal if:
 - Strategy abbreviations: `CC`, `CSP`, `PMCC`, `CSP`
 - Common words: `ETF`, `RSI`, `MACD`, `DJI`, `AM`, `PM`
 - Financial acronyms: `FDA`, `SEC`, `FED`, `CPI`, `PPI`, etc.
+
+## Database Schema
+
+### discord_trade_signal (key columns)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| stock_ticker | VARCHAR | e.g. "MU", "SPY" |
+| asset_class | VARCHAR | STOCK, OPTION, ETF, etc. |
+| option_type | VARCHAR | CALL or PUT |
+| strategy_type | VARCHAR | e.g. Covered Call, LEAPS, Iron Condor |
+| strike_price | NUMERIC | e.g. 130.00 |
+| expiration_date | DATE | Option expiry |
+| entry_premium | NUMERIC | Price paid for option |
+| premium_price | NUMERIC | Alias for entry_premium (both set) |
+| trade_direction | VARCHAR | LONG or SHORT |
+| entry_price | NUMERIC | Stock entry price |
+| target_price | NUMERIC | |
+| stop_loss | NUMERIC | |
+| risk_reward_ratio | NUMERIC | For stock trades |
+| risk_reward_ratio_opt | NUMERIC | For option trades |
+| signal_status | VARCHAR | ACTIVE, CLOSED, EXPIRED, CANCELLED |
+| signal_date | DATE | Trade date |
+| confidence | VARCHAR | HIGH, MEDIUM, LOW |
+
+### discord_message (key columns)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | SERIAL | Internal PK |
+| message_id | VARCHAR | Discord snowflake ID |
+| channel_id | INT FK | -> discord_channel.id |
+| author_username | VARCHAR | |
+| content | TEXT | Raw message content |
+| cleaned_content | TEXT | Discord markup stripped |
+| message_timestamp | TIMESTAMPTZ | Discord server timestamp |
+| author_posted_at | TIMESTAMPTZ | Parsed from content header |
 
 ## Image Storage
 
@@ -136,3 +146,6 @@ C:\DiscordData\
 3. **Duplicate signals** — parser now uses `tickers[:1]`, dedup by `message_id`
 4. **FK violation on message_id** — signal.message_id references internal PK (discord_message.id), not Discord snowflake
 5. **CC/covered call extracted as ticker** — "CC" added to COMMON_WORDS blocklist
+6. **LEAPS not recognized** — parser now detects "LEAPS"/"LEAP" strategy, defaults option_type to CALL
+7. **LEAPS messages skipped** — signal filter now allows LEAPS through without literal "call"/"put" in text
+8. **Cursor behind — messages missed** — channel 2 cursor `last_message_id` set to unsaved message ID; fix: manually update cursor to newest saved message ID in `discord_channel`
