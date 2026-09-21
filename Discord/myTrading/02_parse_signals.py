@@ -89,6 +89,10 @@ COMMON_WORDS = {
     'THAN', 'INTO', 'YEAR', 'MOST', 'JUST', 'OVER', 'ALSO', 'SOME', 'LIKE',
     'GOOGL', 'GOOG', 'AMZN', 'META', 'TSLA', 'NVDA', 'MSFT', 'AAPL',
     'AM', 'PM',  # times of day - not tickers
+    # Strategy/trading abbreviations
+    'CC', 'CCC',  # covered call
+    'CSP', 'CCSP',  # cash-secured put, covered call short put
+    'PMCC', 'CCEX',  # poor man's covered call
 }
 
 
@@ -141,7 +145,6 @@ def extract_tickers(text):
     for t in matches:
         if t in COMMON_WORDS:
             continue
-            continue  # skip 2-letter acronyms and year-like 2-digit strings
         # Skip if ticker appears ONLY in a parenthetical base/underlying explanation
         # e.g. "GGLL (lev ticker on GOOGL)" -> skip GOOGL
         pat = re.compile(
@@ -227,7 +230,7 @@ def parse_msg(msg_row, conn):
     if not msg_row:
         return []
 
-    msg_pk, channel_fk, account_id, msg_ts, author_username, author_posted_at, content = msg_row
+    internal_msg_id, channel_fk, account_id, msg_ts, author_username, author_posted_at, content = msg_row
     if not content:
         return []
 
@@ -286,10 +289,11 @@ def parse_msg(msg_row, conn):
                 'MEDIUM' if (entry_price and target_price) else 'LOW'
 
     signals = []
-    for ticker in tickers[:3]:
+    for ticker in tickers[:1]:
         sig = {
             'account_id':      account_id,
             'channel_id':      channel_fk,
+            'message_id':     internal_msg_id,
             'signal_id':       str(uuid.uuid4()),
             'asset_class':    asset_class,
             'signal_status':   'ACTIVE',
@@ -355,9 +359,16 @@ def parse_msg(msg_row, conn):
                     except ZeroDivisionError:
                         pass
         else:
-            sig['stock_ticker'] = None
             sig['option_type'] = None
             sig['expiration_date'] = None
+
+        # Only emit signal if it has all required fields
+        if asset_class == 'OPTION':
+            if not (sig.get('option_type') and sig.get('strike_price') and sig.get('expiration_date')):
+                continue
+        else:  # STOCK/ETF
+            if not (sig.get('entry_price') and sig.get('trade_direction')):
+                continue
 
         signals.append(sig)
     return signals
@@ -415,8 +426,7 @@ def fetch_messages(conn, channel_id=None, limit=500):
             WHERE m.channel_id = %s
               AND NOT EXISTS (
                   SELECT 1 FROM discord_trade_signal s
-                  WHERE s.channel_id = m.channel_id
-                    AND LEFT(s.signal_text, 80) = LEFT(m.content, 80)
+                  WHERE s.message_id = m.id
               )
               AND m.content IS NOT NULL AND m.content != ''
             ORDER BY m.message_timestamp DESC
@@ -430,8 +440,7 @@ def fetch_messages(conn, channel_id=None, limit=500):
             JOIN discord_channel c ON c.id = m.channel_id
             WHERE NOT EXISTS (
                 SELECT 1 FROM discord_trade_signal s
-                WHERE s.channel_id = m.channel_id
-                  AND LEFT(s.signal_text, 80) = LEFT(m.content, 80)
+                WHERE s.message_id = m.id
             )
               AND m.content IS NOT NULL AND m.content != ''
             ORDER BY m.message_timestamp DESC

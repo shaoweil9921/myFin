@@ -6,8 +6,11 @@ import json
 import time
 import requests
 import psycopg2
+from psycopg2 import extras
 import argparse
 from datetime import datetime, date
+from pathlib import Path
+import urllib.parse
 
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
@@ -51,6 +54,23 @@ def is_market_open(conn):
     OPEN_SECS  = 8 * 3600 + 30 * 60   # 08:30
     CLOSE_SECS = 17 * 3600              # 17:00
     return OPEN_SECS <= total_secs <= CLOSE_SECS
+
+
+BASE_IMAGE_DIR = Path(os.environ.get('DISCORD_IMAGE_ROOT', r'C:\DiscordData'))
+
+
+def download_image(url, dest_path):
+    """Download an image URL to dest_path. Returns True on success."""
+    try:
+        resp = requests.get(url, timeout=20)
+        if resp.status_code == 200 and len(resp.content) > 1024:
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(dest_path, 'wb') as f:
+                f.write(resp.content)
+            return True
+        return False
+    except Exception:
+        return False
 
 
 def discord_request(method, url, **kwargs):
@@ -186,7 +206,8 @@ def clean_text(text):
 
 _AUTHOR_TS_PAT = re.compile(
     # Captures: username (everything before first digit), date, time, AM/PM
-    r'^(.+?)\s+(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})\s+(\d{1,2}:\d{2})\s*(AM|PM|am|pm)',
+    # Accepts em-dash, en-dash, replacement char, or any non-digit as separator
+    r'^(.+?)\s*\D\s*(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})\s+(\d{1,2}:\d{2})\s*(AM|PM|am|pm)',
     re.UNICODE
 )
 _Month_MAP = {
@@ -235,7 +256,6 @@ def save_messages(conn, channel_db_id, account_id, channel_discord_id, messages)
     if not messages:
         return 0
 
-    # Discord returns newest first; capture the newest (first) snowflake as cursor
     last_msg_id = messages[0]['id']
     saved = 0
     cur = conn.cursor()
@@ -244,32 +264,43 @@ def save_messages(conn, channel_db_id, account_id, channel_discord_id, messages)
         parsed = parse_message(msg)
         parsed['cleaned_content'] = clean_text(parsed['content'])
 
-        # Upsert message
-        cur.execute("""
-            INSERT INTO discord_message (
-                account_id, channel_id, message_id, author_id, author_username,
-                content, cleaned_content,
-                embed_titles, embed_descriptions, embed_urls, embed_images,
-                attachments, reactions,
-                thread_id, thread_name, reply_to_message_id,
-                is_pinned, message_type, has_mentions, has_bot_mention,
-                edited_at, message_timestamp, author_posted_at, raw_json
-            ) VALUES (
-                %s, %s, %s, %s,
-                %s, %s,
-                %s, %s, %s, %s,
-                %s, %s,
-                %s, %s, %s,
-                %s, %s, %s, %s,
-                %s, %s, %s, %s
-            )
-            ON CONFLICT (channel_id, message_id) DO UPDATE SET
-                content = EXCLUDED.content,
-                cleaned_content = EXCLUDED.cleaned_content,
-                edited_at = EXCLUDED.edited_at,
-                author_posted_at = EXCLUDED.author_posted_at,
-                raw_json = EXCLUDED.raw_json
-        """, (
+        # Build per-message image dir: C:\DiscordData\{channel_id}\{year}\{month}
+        msg_ts = msg.get('timestamp', '')
+        if msg_ts:
+            try:
+                dt = datetime.fromisoformat(msg_ts.replace('Z', '+00:00'))
+                ym = dt.strftime('%Y/%m')
+            except ValueError:
+                ym = 'unknown'
+        else:
+            ym = 'unknown'
+        ch_img_dir = BASE_IMAGE_DIR / channel_discord_id / ym
+
+        # Download images
+        local_paths = []
+        if parsed['attachments']:
+            for i, att in enumerate(parsed['attachments']):
+                url = att.get('url', '')
+                if not url:
+                    continue
+                ext = Path(urllib.parse.urlparse(url).path).suffix or '.png'
+                local_name = f"{parsed['message_id']}_att_{i}{ext}"
+                dest = ch_img_dir / local_name
+                if download_image(url, dest):
+                    local_paths.append(str(dest))
+
+        if parsed['embed_images']:
+            for i, url in enumerate(parsed['embed_images']):
+                if not url:
+                    continue
+                ext = Path(urllib.parse.urlparse(url).path).suffix or '.png'
+                local_name = f"{parsed['message_id']}_emb_{i}{ext}"
+                dest = ch_img_dir / local_name
+                if download_image(url, dest):
+                    local_paths.append(str(dest))
+
+        # Build values - use json.dumps for all complex types
+        vals = [
             account_id,
             channel_db_id,
             parsed['message_id'],
@@ -279,8 +310,8 @@ def save_messages(conn, channel_db_id, account_id, channel_discord_id, messages)
             parsed['cleaned_content'],
             parsed['embed_titles'],
             parsed['embed_descriptions'],
-            parsed['embed_urls'],
-            parsed['embed_images'],
+            json.dumps(parsed['embed_urls']) if parsed['embed_urls'] else None,
+            json.dumps(parsed['embed_images']) if parsed['embed_images'] else None,
             json.dumps(parsed['attachments']) if parsed['attachments'] else None,
             json.dumps(parsed['reactions']) if parsed['reactions'] else None,
             parsed['thread_id'],
@@ -293,11 +324,35 @@ def save_messages(conn, channel_db_id, account_id, channel_discord_id, messages)
             parsed['edited_at'],
             parsed['message_timestamp'],
             parsed.get('author_posted_at'),
-            json.dumps(parsed['raw_json']),
-        ))
-        saved += 1
+            json.dumps(local_paths) if local_paths else None,
+        ]
 
-    conn.commit()
+        try:
+            cur.execute("""
+                INSERT INTO discord_message (
+                    account_id, channel_id, message_id, author_id, author_username,
+                    content, cleaned_content,
+                    embed_titles, embed_descriptions, embed_urls, embed_images,
+                    attachments, reactions,
+                    thread_id, thread_name, reply_to_message_id,
+                    is_pinned, message_type, has_mentions, has_bot_mention,
+                    edited_at, message_timestamp, author_posted_at,
+                    local_image_path
+                ) VALUES (
+                    %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
+                )
+                ON CONFLICT (channel_id, message_id) DO UPDATE SET
+                    content = EXCLUDED.content,
+                    cleaned_content = EXCLUDED.cleaned_content,
+                    edited_at = EXCLUDED.edited_at,
+                    author_posted_at = EXCLUDED.author_posted_at,
+                    local_image_path = EXCLUDED.local_image_path
+            """, vals)
+            conn.commit()
+            saved += 1
+        except Exception as ex:
+            print(f"    INSERT FAILED for {parsed['message_id']}: {ex}")
+            conn.rollback()
 
     # Update cursor
     if last_msg_id:
@@ -310,6 +365,7 @@ def save_messages(conn, channel_db_id, account_id, channel_discord_id, messages)
 
     cur.close()
     return saved
+
 
 
 def fetch_channel(conn, channel_row):
@@ -350,16 +406,18 @@ def main():
     cur = conn.cursor()
     if args.channel_id:
         cur.execute("""
-            SELECT id, channel_id, channel_name, last_message_id
-            FROM discord_channel
-            WHERE id = %s AND is_tracking = TRUE
+            SELECT c.id, c.channel_id, c.channel_name, c.last_message_id, a.id
+            FROM discord_channel c
+            JOIN discord_account a ON a.id = c.account_id
+            WHERE c.id = %s AND c.is_tracking = TRUE
         """, (args.channel_id,))
     else:
         cur.execute("""
-            SELECT id, channel_id, channel_name, last_message_id
-            FROM discord_channel
-            WHERE is_tracking = TRUE
-            ORDER BY updated_at ASC NULLS FIRST
+            SELECT c.id, c.channel_id, c.channel_name, c.last_message_id, a.id
+            FROM discord_channel c
+            JOIN discord_account a ON a.id = c.account_id
+            WHERE c.is_tracking = TRUE
+            ORDER BY c.updated_at ASC NULLS FIRST
         """)
     channels = cur.fetchall()
     cur.close()
@@ -373,7 +431,7 @@ def main():
     total_saved = 0
 
     for ch in channels:
-        ch_db_id, ch_discord_id, ch_name, last_msg_id = ch
+        ch_db_id, ch_discord_id, ch_name, last_msg_id, account_id = ch
         print(f"\n  [{ch_name} ({ch_discord_id})] last_cursor={last_msg_id}")
         saved = fetch_channel(conn, ch)
         print(f"  -> {saved} new message(s)")
