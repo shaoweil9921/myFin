@@ -1,106 +1,108 @@
-"""Save Jarsy token data extracted from browser to database."""
-import psycopg2
-from datetime import date
+"""
+Jarsy Save — reads jarsy_presale.json and jarsy_live.json, saves to DB.
+"""
+import json, os, psycopg2, sys
 
-PRESALE_TOKENS = [
-    ("JAXIO-PRE", "Axiom Space, Inc.", "Presale", None),
-    ("JNRLK-PRE", "Neuralink Corp.", "Presale", None),
-    ("JSRNC-PRE", "Saronic Technologies, Inc.", "Presale", None),
-    ("JWRLD-PRE", "World Labs, Inc.", "Presale", None),
-    ("JWYMO-PRE", "Waymo LLC", "Presale", None),
-    ("JPOLY-PRE", "Polymarket - Jarsy", "Presale", 200.00),
-    ("JCBRS-PRE", "Cerebras Systems Inc.", "Presale", 122.00),
-    ("JKALS-PRE", "Kalshi Inc.", "Presale", 451.00),
-    ("JFIGR-PRE", "Figure AI, Inc.", "Presale", 171.00),
-    ("JOPAI-PRE", "OpenAI Group PBC", "Presale", 880.00),
-    ("JPEPX-PRE", "Perplexity AI Inc.", "Presale", 818.53),
-    ("JRFLX-PRE", "Reflection AI Inc.", "Presale", 100.00),
-    ("JCRSO-PRE", "Crusoe Energy Holdings Inc.", "Presale", 145.00),
-    ("JPSIQ-PRE", "PsiQuantum Corp.", "Presale", 45.00),
-    ("JSHLD-PRE", "Shield AI, Inc.", "Presale", 235.00),
-    ("JREDW-PRE", "Redwood Materials Inc.", "Presale", 55.00),
-    ("JANTH-PRE", "Anthropic PBC", "Presale", 720.00),
-    ("JAPTK-PRE", "Apptronik, Inc.", "Presale", None),
-    ("JVRCL-PRE", "Vercel Inc.", "Presale", 234.72),
-    ("JKRAK-PRE", "Payward, Inc. Kraken", "Presale", 52.00),
-    ("JDATA-PRE", "Databricks Inc.", "Presale", 270.00),
-    ("JANDL-PRE", "Anduril Industries, Inc", "Presale", 160.00),
-    ("JDISC-PRE", "Discord Inc.", "Presale", 280.00),
-    ("JNOTE-PRE", "Notion Labs Inc.", "Presale", 70.00),
-    ("JSTRP-PRE", "Stripe, Inc.", "Presale", 84.00),
-    ("JLAMB-PRE", "Lambda, Inc.", "Presale", None),
-    ("JANY-PRE", "Anysphere Inc. (Cursor)", "Presale", None),
-    ("JAGIL-PRE", "Agility Robotics Inc.", "Presale", 86.00),
-    ("JHELN-PRE", "Helion Energy, Inc.", "Presale", None),
-    ("JELVN-PRE", "ElevenLabs, Inc.", "Presale", None),
-    ("JHUGF-PRE", "Hugging Face, Inc.", "Presale", None),
-    ("JSESA-PRE", "Sesame AI Inc.", "Presale", None),
-    ("JRIPL-PRE", "Ripple Labs, Inc.", "Presale", 151.00),
-    ("JSAMB-PRE", "SambaNova Systems, Inc.", "Presale", None),
-    ("JREPL-PRE", "Replit, Inc.", "Presale", 300.00),
-]
+DB_CONFIG = {
+    'host': '127.0.0.1',
+    'port': 5432,
+    'dbname': 'fintech',
+    'user': 'postgres',
+    'password': 'asdfghjk1234%'
+}
 
-LIVE_TOKENS = [
-    ("JPOLY", "Polymarket (Blockratize Inc.)", "Live", 155.54),
-    ("JCRSO", "Crusoe Energy Holdings Inc.", "Live", 187.43),
-    ("JREPL", "Replit, Inc.", "Live", 310.00),
-    ("JRFLX", "Reflection AI Inc.", "Live", 105.00),
-    ("JCBRS", "Cerebras Systems Inc.", "Live", 180.00),
-    ("JKRAK", "Payward, Inc. (Kraken)", "Live", 28.10),
-    ("JHVAI", "Harvey AI, Inc", "Live", 270.36),
-    ("JMERC", "Mercury Technologies Inc.", "Live", 19.00),
-    ("JPEPX", "Perplexity AI, Inc.", "Live", 757.97),
-    ("JXAI", "X.AI Corp.", "Live", 62.00),
-    ("JSPAX", "SpaceX Tech. Corp.", "Live", 430.00),
-    ("JANY", "Anysphere Inc. (Cursor)", "Live", 936.33),
-    ("JKALS", "Kalshi Inc.", "Live", 725.93),
-    ("JSPAX_2", "SpaceX Tech. Corp. II", "Live", 415.00),
-    ("JPSIQ", "PsiQuantum Corp.", "Live", 43.16),
-    ("JVRCL", "Vercel Inc.", "Live", 267.83),
-    ("JAGIL", "Agility Robotics Inc.", "Live", 112.12),
-    ("JANTH", "Anthropic, PBC.", "Live", 655.14),
-    ("JANDL", "Anduril Industries, Inc", "Live", 164.55),
-    ("JNOTE", "Notion Labs Inc.", "Live", 74.95),
-    ("JDISC", "Discord Inc.", "Live", 201.18),
-    ("JSTRP", "Stripe Inc.", "Live", 45.68),
-    ("JDATA", "Databricks Inc.", "Live", 200.27),
-    ("JAPTK", "Apptronik, Inc.", "Live", 47.93),
-    ("JRIPL", "Ripple. Corp.", "Live", 177.09),
-    ("JREDW", "Redwood Materials Inc.", "Live", 53.00),
-    ("JSHLD", "Shield AI, Inc.", "Live", 314.32),
-    ("JCHAOS", "Chaos Industries, Inc.", "Live", 162.86),
-    ("JFIGR", "Figure AI, Inc.", "Live", 416.52),
-]
+PRESALE_FILE = r"C:\Users\shaowei_l\.openclaw\workspace\jarsy_presale.json"
+LIVE_FILE = r"C:\Users\shaowei_l\.openclaw\workspace\jarsy_live.json"
 
-conn = psycopg2.connect(
-    host="127.0.0.1", port=5432, database="fintech",
-    user="postgres", password="asdfghjk1234%"
-)
-cur = conn.cursor()
+def get_conn():
+    return psycopg2.connect(**DB_CONFIG)
 
-today = date.today()
-scan_id = 293  # from the cron run
+def load_json(path):
+    if not os.path.exists(path):
+        print(f"  WARNING: {path} not found — skipping")
+        return []
+    with open(path) as f:
+        data = json.load(f)
+    print(f"  Loaded {len(data)} tokens from {os.path.basename(path)}")
+    return data
 
-# Clear old data for today
-cur.execute("DELETE FROM jarsy_asset WHERE extract_date = %s", (today,))
-cur.execute("DELETE FROM jarsy_asset_live WHERE extract_date = %s", (today,))
-print(f"Cleared {cur.rowcount} existing rows for {today}")
+def save_presale(tokens, scan_id):
+    if not tokens:
+        print("  No presale tokens to save")
+        return 0
+    conn = get_conn()
+    cur = conn.cursor()
+    saved = 0
+    for tok in tokens:
+        symbol = tok.get("symbol", "").strip()
+        name = tok.get("name", "").strip()
+        price_str = tok.get("price", "")
+        price = float(price_str) if price_str else None
 
-# Insert presale
-for symbol, token_name, action, price in PRESALE_TOKENS:
-    cur.execute("""
-        INSERT INTO jarsy_asset (token_name, symbol, price, holding, action, extract_date, scan_id)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-    """, (token_name, symbol, price, None, action, today, scan_id))
+        if not symbol or not name:
+            continue
 
-# Insert live
-for symbol, token_name, action, price in LIVE_TOKENS:
-    cur.execute("""
-        INSERT INTO jarsy_asset_live (token_name, symbol, price, holding, action, extract_date, scan_id)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-    """, (token_name, symbol, price, None, action, today, scan_id))
+        cur.execute("""
+            INSERT INTO jarsy_asset (extract_date, token_name, symbol, price, holding, action, scan_id)
+            VALUES (CURRENT_DATE, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (extract_date, symbol) DO UPDATE SET
+                token_name = EXCLUDED.token_name,
+                price = EXCLUDED.price,
+                holding = EXCLUDED.holding,
+                action = EXCLUDED.action,
+                updated_at = NOW()
+        """, (name, symbol, price, tok.get("holding", "-"), "Buy", scan_id))
+        saved += 1
+    conn.commit()
+    conn.close()
+    print(f"  Saved {saved} presale tokens (scan_id={scan_id})")
+    return saved
 
-conn.commit()
-print(f"Inserted {len(PRESALE_TOKENS)} presale + {len(LIVE_TOKENS)} live tokens (scan_id={scan_id})")
-cur.close()
-conn.close()
+def save_live(tokens, scan_id):
+    if not tokens:
+        print("  No live tokens to save")
+        return 0
+    conn = get_conn()
+    cur = conn.cursor()
+    saved = 0
+    for tok in tokens:
+        symbol = tok.get("symbol", "").strip()
+        name = tok.get("name", "").strip()
+        price_str = tok.get("price", "")
+        price = float(price_str) if price_str else None
+
+        if not symbol or not name:
+            continue
+
+        cur.execute("""
+            INSERT INTO jarsy_asset_live (extract_date, token_name, symbol, price, holding, action, scan_id)
+            VALUES (CURRENT_DATE, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (extract_date, symbol) DO UPDATE SET
+                token_name = EXCLUDED.token_name,
+                price = EXCLUDED.price,
+                holding = EXCLUDED.holding,
+                action = EXCLUDED.action,
+                updated_at = NOW()
+        """, (name, symbol, price, tok.get("holding", "-"), "Buy", scan_id))
+        saved += 1
+    conn.commit()
+    conn.close()
+    print(f"  Saved {saved} live tokens (scan_id={scan_id})")
+    return saved
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: python jarsy_save.py <scan_id>")
+        sys.exit(1)
+
+    scan_id = int(sys.argv[1])
+
+    print("Reading JSON files...")
+    presale_tokens = load_json(PRESALE_FILE)
+    live_tokens = load_json(LIVE_FILE)
+
+    print("Saving to DB...")
+    n_pre = save_presale(presale_tokens, scan_id)
+    n_live = save_live(live_tokens, scan_id)
+
+    print(f"DONE: {n_pre} presale, {n_live} live saved to scan_id={scan_id}")
