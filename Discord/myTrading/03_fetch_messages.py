@@ -372,7 +372,12 @@ def fetch_channel(conn, channel_row):
     """Fetch new messages for one channel."""
     ch_db_id, ch_discord_id, ch_name, last_msg_id, account_id = channel_row
 
-    messages = fetch_channel_messages(ch_discord_id, before_msg_id=last_msg_id)
+    # Always fetch fresh messages (no before= param) and dedup via ON CONFLICT.
+    # Using before_msg_id was wrong: Discord IDs aren't monotonically tied to
+    # post time in the way needed for pagination, so 'before=cursor' often
+    # skips newer messages. ON CONFLICT (channel_id, message_id) DO UPDATE
+    # handles any duplicates safely.
+    messages = fetch_channel_messages(ch_discord_id, before_msg_id=None)
     if messages is None:
         return 0  # error
 
