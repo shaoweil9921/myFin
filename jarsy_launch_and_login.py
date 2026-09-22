@@ -1,63 +1,46 @@
 """
-Jarsy Launch and Login — Fully Automated
-=========================================
-Launches Chrome with jarsy_profile, logs in via Google OAuth if needed.
-Reuses existing session if already logged in.
-Returns (success: bool, message: str)
+Jarsy Launch and Login - Cookie-Based Session
+==============================================
+Uses saved cookies from jarsy_cookies.pkl (captured from logged-in session).
+Launches Chrome with jarsy_profile, injects cookies, navigates to Jarsy PE.
+No manual login needed as long as cookies are fresh.
 """
-import json, os, socket, subprocess, sys, time
+import json, os, pickle, socket, subprocess, sys, time
 from playwright.sync_api import sync_playwright
 
-# ── Config ──────────────────────────────────────────────────────────────────
+# Config
 CHROME_EXE = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
 JARSY_PROFILE = r"C:\Users\shaowei_l\AppData\Local\Google\Chrome\User Data\jarsy_profile"
 DEBUG_PORT = 9222
+COOKIE_FILE = r"C:\Users\shaowei_l\.openclaw\workspace\jarsy_cookies.pkl"
 JARSY_URL = "https://app.jarsy.com/layout/Home"
 PE_URL = "https://app.jarsy.com/layout/PrivateEquity"
-EMAIL = "shaowei.liu@gmail.com"
-PASSWORD = os.environ.get("JARSY_PASSWORD", "")  # Set as Windows env var
-# ─────────────────────────────────────────────────────────────────────────────
-
-def find_free_port(start=9222):
-    for port in range(start, start + 10):
-        try:
-            with socket.socket() as s:
-                s.bind(("", port))
-                return port
-        except OSError:
-            continue
-    raise RuntimeError("No free port found")
+COOKIE_MAX_AGE_DAYS = 25
 
 
 def is_chrome_running(port):
-    """Check if Chrome is running with debug port."""
     try:
         import urllib.request
         req = urllib.request.urlopen(f"http://localhost:{port}/json", timeout=3)
-        tabs = json.loads(req.read())
-        return len(tabs) >= 0  # Chrome is running
+        json.loads(req.read())
+        return True
     except Exception:
         return False
 
 
-def wait_for_jarsy_tab(port, timeout=20):
-    """Wait for a Jarsy tab to appear in Chrome."""
-    import urllib.request
-    for _ in range(timeout):
-        try:
-            req = urllib.request.urlopen(f"http://localhost:{port}/json", timeout=3)
-            tabs = json.loads(req.read())
-            for tab in tabs:
-                if "jarsy" in tab.get("url", "").lower():
-                    return True
-        except Exception:
-            pass
-        time.sleep(1)
-    return False
+def cookie_age():
+    """Return cookie file age in days, or None if no file."""
+    if not os.path.exists(COOKIE_FILE):
+        return None
+    return (time.time() - os.path.getmtime(COOKIE_FILE)) / 86400
+
+
+def load_cookies():
+    with open(COOKIE_FILE, "rb") as f:
+        return pickle.load(f)
 
 
 def is_logged_in(page):
-    """Check if page shows Private Equity content (logged in)."""
     try:
         text = page.inner_text("body")
         return "Private Equity Live" in text or "Private Equity Presale" in text
@@ -65,224 +48,143 @@ def is_logged_in(page):
         return False
 
 
-def is_login_modal(page):
-    """Check if page shows a login modal."""
-    try:
-        text = page.inner_text("body")[:500]
-        return "log in" in text.lower() or "sign in" in text.lower()
-    except Exception:
-        return False
+def check_cookie_freshness():
+    age = cookie_age()
+    if age is None:
+        return False, "no_cookie_file"
+    if age > COOKIE_MAX_AGE_DAYS:
+        return False, f"cookie_stale_{age:.0f}_days"
+    return True, f"fresh_{age:.1f}_days"
 
 
-def auto_login_google(page, timeout=60):
-    """
-    Attempt fully-automated Google OAuth login.
-    Returns True if login succeeded (PE content visible), False otherwise.
-    Falls back gracefully if Google blocks automation.
-    """
-    if not PASSWORD:
-        print("  JARSY_PASSWORD env var not set — cannot auto-login")
-        return False
-
-    try:
-        # Look for Google sign-in button
-        google_buttons = [
-            page.get_by_text("Sign in with Google"),
-            page.get_by_text("Continue with Google"),
-            page.locator('button:has-text("Google")'),
-        ]
-        btn = None
-        for b in google_buttons:
-            try:
-                if b.is_visible(timeout=2000):
-                    btn = b
-                    break
-            except Exception:
-                pass
-
-        if not btn:
-            print("  No Google sign-in button found")
-            return False
-
-        print("  Clicking Google sign-in button...")
-        btn.click()
-
-        # Wait for popup / navigation
-        time.sleep(3)
-
-        # Handle all open pages (main + popup)
-        all_pages = page.context.pages
-        oauth_page = None
-        for p in all_pages:
-            try:
-                url = p.url.lower()
-                if "accounts.google.com" in url or "oauth" in url:
-                    oauth_page = p
-                    break
-            except Exception:
-                pass
-
-        if not oauth_page:
-            # Maybe it navigated within same page
-            print("  Waiting for Google OAuth page...")
-            time.sleep(3)
-            all_pages = page.context.pages
-            for p in all_pages:
-                try:
-                    if "accounts.google.com" in p.url:
-                        oauth_page = p
-                        break
-                except Exception:
-                    pass
-
-        if oauth_page:
-            print("  On OAuth page — entering email...")
-            # Enter email
-            email_field = oauth_page.locator('input[type="email"], input[name="identifier"]')
-            email_field.fill(EMAIL)
-            oauth_page.locator('div[id="identifierNext"], button:has-text("Next")').first.click()
-            time.sleep(3)
-
-            print("  Entering password...")
-            pw_field = oauth_page.locator('input[type="password"]')
-            pw_field.fill(PASSWORD)
-            oauth_page.locator('div[id="passwordNext"], button:has-text("Next")').first.click()
-            time.sleep(5)
-
-            # Handle "Choose an account" screen if it appears
-            for p in page.context.pages:
-                try:
-                    if "accounts.google.com" in p.url:
-                        accounts_text = p.inner_text("body")[:300]
-                        if EMAIL in accounts_text:
-                            # Click the matching account
-                            p.get_by_text(EMAIL).click()
-                            time.sleep(3)
-                            break
-                except Exception:
-                    pass
-
-        # Wait for login to complete — look for PE content
-        print(f"  Waiting up to {timeout}s for PE content...")
-        for remaining in range(timeout, 0, -5):
-            try:
-                page_text = page.inner_text("body")
-                if "Private Equity Live" in page_text or "Private Equity Presale" in page_text:
-                    print("  ✓ Login successful — PE content visible")
-                    return True
-            except Exception:
-                pass
-            time.sleep(5)
-
-        # Check if we're on jarsy PE page now
-        if "PrivateEquity" in page.url or is_logged_in(page):
+def wait_for_pe_content(page, timeout=20):
+    """Wait for PE tab content to load (tokens appear after JS render)."""
+    start = time.time()
+    while time.time() - start < timeout:
+        if is_logged_in(page):
             return True
-
-        return False
-
-    except Exception as e:
-        print(f"  Auto-login error: {e}")
-        return False
+        time.sleep(2)
+    return is_logged_in(page)
 
 
-def launch_and_login():
-    """Main entry point. Returns (success, message)."""
+def launch_with_cookies():
+    """
+    Launch Chrome with jarsy_profile, inject cookies, navigate.
+    Returns (success, message).
+    """
     port = DEBUG_PORT
 
-    # ── Step 1: Check if Chrome is already running with Jarsy ───────────────
-    if is_chrome_running(port):
-        print(f"Chrome already running on port {port}")
-        if wait_for_jarsy_tab(port, timeout=10):
-            print("Jarsy tab found — checking login state...")
+    # Check if Chrome already running on debug port
+    reuse_chrome = is_chrome_running(port)
+    if reuse_chrome:
+        print(f"Chrome already on port {port} -- connecting...")
+    else:
+        print(f"Launching Chrome on port {port}...")
+        proc = subprocess.Popen(
+            [
+                CHROME_EXE,
+                f"--remote-debugging-port={port}",
+                "--user-data-dir=" + JARSY_PROFILE,
+                "--profile-directory=jarsy_profile",
+                JARSY_URL,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        time.sleep(6)
+        if not is_chrome_running(port):
+            print("Chrome failed to start!")
+            return False, "chrome_start_failed"
 
-            # Connect and check
-            with sync_playwright() as p:
-                try:
-                    browser = p.chromium.connect_over_cdp(f"http://localhost:{port}", timeout=10000)
-                    ctx = browser.contexts[0]
-                    page = ctx.pages[0] if ctx.pages else ctx.new_page()
-                    page.goto(PE_URL, timeout=20000)
-                    page.wait_for_timeout(5000)
+    # Load cookies
+    try:
+        cookies = load_cookies()
+        print(f"Loaded {len(cookies)} cookies from {COOKIE_FILE}")
+    except Exception as e:
+        print(f"Could not load cookies: {e}")
+        return False, "cookie_load_failed"
 
-                    if is_logged_in(page):
-                        print("Already logged in — browser session is valid")
-                        browser.close()
-                        return True, "already_logged_in"
-                    else:
-                        print("Chrome running but not logged in — attempting auto-login...")
-                        if auto_login_google(page, timeout=60):
-                            browser.close()
-                            return True, "auto_login_success"
-                        browser.close()
-                        return False, "login_required"
-                except Exception as e:
-                    print(f"Connect error: {e}")
-                    # Fall through to re-launch
-
-    # ── Step 2: Launch fresh Chrome with jarsy_profile ───────────────────
-    print(f"Launching Chrome with jarsy_profile on port {port}...")
-    profile_dir = JARSY_PROFILE
-
-    proc = subprocess.Popen(
-        [
-            CHROME_EXE,
-            f"--remote-debugging-port={port}",
-            "--user-data-dir=" + profile_dir,
-            "--profile-directory=jarsy_profile",
-            JARSY_URL,
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-
-    print("Waiting for Chrome to start...")
-    time.sleep(8)
-
-    if not is_chrome_running(port):
-        print("Chrome failed to start!")
-        return False, "chrome_start_failed"
-
-    # ── Step 3: Connect and check login state ─────────────────────────────
     with sync_playwright() as p:
         try:
-            browser = p.chromium.connect_over_cdp(f"http://localhost:{port}", timeout=15000)
+            browser = p.chromium.connect_over_cdp(f"http://localhost:{port}", timeout=20000)
         except Exception as e:
             print(f"CDP connect failed: {e}")
-            proc.terminate()
-            return False, f"cdp_connect_failed: {e}"
+            return False, "cdp_connect_failed"
 
         ctx = browser.contexts[0]
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
 
+        # Inject cookies before navigating
+        print("Injecting cookies...")
+        try:
+            # Clear existing Jarsy cookies first
+            existing = ctx.cookies()
+            jarsy_domains = set()
+            for c in existing:
+                d = c.get("domain", "")
+                if "jarsy" in d or "privy" in d or "cf" in d:
+                    jarsy_domains.add(d)
+            if jarsy_domains:
+                ctx.clear_cookies()
+        except Exception:
+            pass
+
+        # Add cookies to context
+        ctx.add_cookies(cookies)
+        print(f"Added {len(cookies)} cookies to context")
+
+        # Navigate to PE page
         print("Navigating to Private Equity...")
         page.goto(PE_URL, timeout=30000)
-        page.wait_for_timeout(8000)
+        page.wait_for_timeout(5000)
 
-        if is_logged_in(page):
-            print("✓ Already logged in — session valid")
-            # Keep Chrome running, just close playwright connection
+        # Wait for PE content to appear (JS renders after page load)
+        print("Waiting for PE content to render...")
+        pe_ready = wait_for_pe_content(page, timeout=20)
+
+        if pe_ready:
+            token_count = page.inner_text("body").count("- Jarsy")
+            print(f"[OK] Logged in -- {token_count} tokens visible")
             browser.close()
-            return True, "already_logged_in"
+            return True, f"logged_in_{token_count}_tokens"
 
-        print("Not logged in — attempting Google OAuth auto-login...")
-        if auto_login_google(page, timeout=60):
+        # Try one more time with longer wait
+        print("PE content not found -- trying longer wait...")
+        page.wait_for_timeout(15000)
+        pe_ready = is_logged_in(page)
+
+        if pe_ready:
+            token_count = page.inner_text("body").count("- Jarsy")
+            print(f"[OK] Logged in after retry -- {token_count} tokens")
             browser.close()
-            return True, "auto_login_success"
+            return True, f"logged_in_{token_count}_tokens"
 
-        print("✗ Auto-login failed or timed out")
+        # Capture screenshot for debugging
+        try:
+            page.screenshot(path="jarsy_login_debug.png", full_page=True)
+            print("Debug screenshot saved: jarsy_login_debug.png")
+        except Exception:
+            pass
+
+        print("X Session cookies did not log in -- cookies may be expired")
         browser.close()
-
-    # ── Step 4: Return failure info ───────────────────────────────────────
-    proc.terminate()
-    try:
-        proc.wait(timeout=5)
-    except Exception:
-        proc.kill()
-    return False, "login_required"
+        return False, "cookie_login_failed"
 
 
-if __name__ == "__main__":
-    success, msg = launch_and_login()
+def main():
+    # Check cookie freshness
+    fresh, age_msg = check_cookie_freshness()
+    if not fresh:
+        print(f"Cookie problem: {age_msg}")
+        print("Run save_cookies.py after manual login to refresh session.")
+        sys.exit(1)
+
+    print(f"Cookies: {age_msg}")
+    success, msg = launch_with_cookies()
     print(f"\nResult: success={success}, msg={msg}")
     if not success:
         sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
