@@ -87,7 +87,6 @@ COMMON_WORDS = {
     'QTD', 'YOY', 'MOIC', 'HIGH', 'LOW', 'NEWS', 'CALL', 'PUT', 'OPEN',
     'CLOSE', 'STOP', 'NEXT', 'THIS', 'THAT', 'WITH', 'FROM', 'HAVE', 'MORE',
     'THAN', 'INTO', 'YEAR', 'MOST', 'JUST', 'OVER', 'ALSO', 'SOME', 'LIKE',
-    'GOOGL', 'GOOG', 'AMZN', 'META', 'TSLA', 'NVDA', 'MSFT', 'AAPL',
     'AM', 'PM',  # times of day - not tickers
     # Strategy/trading abbreviations
     'CC', 'CCC',  # covered call
