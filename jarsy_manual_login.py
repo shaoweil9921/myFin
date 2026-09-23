@@ -5,7 +5,7 @@ User manually logs into Jarsy, script saves cookies when page shows "Private Equ
 import pickle, time
 from playwright.sync_api import sync_playwright
 
-PROFILE_DIR = r"C:\Users\shaowei_l\.openclaw\workspace\jarsy_profile"
+PROFILE_DIR = r"C:\Users\shaowei_l\AppData\Local\Google\Chrome\User Data\jarsy_profile"
 COOKIE_FILE = r"C:\Users\shaowei_l\.openclaw\workspace\jarsy_cookies.pkl"
 
 print("Starting browser...")
