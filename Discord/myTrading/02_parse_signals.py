@@ -44,16 +44,16 @@ _STOP_RE    = _price_pat('stop', 'stoploss', 'stop loss', 'sl', 'stopped')
 
 # Option patterns
 STRIKE_RE = re.compile(
-    r'(?:strike|strike price)\s*[:\s]*\$?([0-9,]+\.?[0-9]*)',
+    r'(?:strike(?:\s*\(s\))?|strike price)\s*[:\s]*\$?([0-9,]+\.?[0-9]*)',
     re.IGNORECASE
 )
 EXPIRY_RE = re.compile(
-    r'(?:exp(?:iry|iration)?|expires?|by)\s*[:.\s]*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})',
+    r'(?:exp(?:iry|iration)?|expires?|by)\s*[:.\s]*(?:(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})|(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*\.?\s+(\d{1,2}),?\s+(\d{4}))',
     re.IGNORECASE
 )
 STRATEGY_LINE_RE = re.compile(
-    r'^strategy\s*[:\s]*(.+?)\s*$',
-    re.MULTILINE | re.IGNORECASE
+    r'(?:strategy)\s*[:\s]+(.+?)(?=\s+(?:expiration|strike|entry|target|stop|comment|email|thoughts|limit)|$)',
+    re.IGNORECASE
 )
 CONTRACT_RE = re.compile(
     r'(\d+)\s*(?:contract|contracts|opts?|options?)\b',
@@ -201,14 +201,27 @@ def parse_expiry(text, signal_date):
     if not m:
         return None
     try:
-        parts = re.split(r'[/-]', m.group(1))
-        month, day = int(parts[0]), int(parts[1])
-        year = int(parts[2]) if len(parts) == 3 else signal_date.year
-        if year < 100:
-            year += 2000
-        return date(year, month, day)
-    except (ValueError, IndexError):
-        return None
+        # Numeric format: group(1) = '10/16/2026'
+        if m.group(1):
+            date_str = m.group(1).strip()
+            parts = re.split(r'[/-]', date_str)
+            month, day = int(parts[0]), int(parts[1])
+            year = int(parts[2]) if len(parts) == 3 else signal_date.year
+            if year < 100:
+                year += 2000
+            return date(year, month, day)
+        # Month-name format: group(2)=MONTH, group(3)=day, group(4)=year
+        elif m.group(2):
+            from calendar import month_abbr
+            month_str = m.group(2).upper()
+            day = int(m.group(3))
+            year = int(m.group(4))
+            for i, abbr in enumerate(month_abbr):
+                if abbr.upper() == month_str:
+                    return date(year, i, day)
+    except (ValueError, IndexError, AttributeError):
+        pass
+    return None
 
 
 def detect_asset_class(text):
@@ -323,15 +336,23 @@ def parse_msg(msg_row, conn):
             if strat_m:
                 sig['strategy_type'] = strat_m.group(1).strip()
 
-            # Infer option_type from direction keyword or LEAPS default
-            if CALL_RE.search(cleaned):
-                sig['option_type'] = 'CALL'
-            elif PUT_RE.search(cleaned):
-                sig['option_type'] = 'PUT'
-            elif sig.get('strategy_type') and re.search(r'\bleaps?\b', sig['strategy_type'], re.IGNORECASE):
-                sig['option_type'] = 'CALL'  # LEAPS are typically calls
-            else:
-                sig['option_type'] = None
+            # Infer option_type from strategy_type first (must check before raw text,
+            # because clean_text collapsed the newlines making ^strategy fail)
+            if sig.get('strategy_type'):
+                st = sig['strategy_type'].lower()
+                if re.search(r'\bcsp\b|\bcash.?secured.?put\b|\bsold.?put\b|\bshort.?put\b', st):
+                    sig['option_type'] = 'PUT'
+                elif re.search(r'\bcc\b|\bcovered.?call\b|\bshort.?call\b', st):
+                    sig['option_type'] = 'CALL'
+                elif re.search(r'\bleaps?\b', st):
+                    sig['option_type'] = 'CALL'
+
+            # Fallback: infer from raw direction keywords in cleaned text
+            if not sig.get('option_type'):
+                if CALL_RE.search(cleaned):
+                    sig['option_type'] = 'CALL'
+                elif PUT_RE.search(cleaned):
+                    sig['option_type'] = 'PUT'
 
             strike_m = STRIKE_RE.search(cleaned)
             if strike_m:
@@ -348,9 +369,17 @@ def parse_msg(msg_row, conn):
                     pass
 
             premium = extract_price(cleaned, PREMIUM_RE)
+            # For CSP/Sold Put: "Entry: $X credit" IS the premium received, not equity price
+            if not premium and sig.get('option_type') == 'PUT' and sig.get('entry_price'):
+                credit_re = re.search(r'entry\s*[:\s]*\$?([0-9,]+\.?[0-9]*)\s*credit', cleaned, re.IGNORECASE)
+                if credit_re:
+                    try:
+                        premium = float(credit_re.group(1).replace(',', ''))
+                    except ValueError:
+                        pass
             if premium:
                 sig['entry_premium'] = premium
-                sig['premium_price'] = premium  # column name maps to premium_price in DB
+                sig['premium_price'] = premium
                 sig['entry_premium_approx'] = is_approx(cleaned, premium)
                 t_pct = target_pct or 50
                 s_pct = stop_pct or 25
