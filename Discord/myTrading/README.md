@@ -80,6 +80,7 @@ A message only generates a signal if it passes the header check AND:
 - Strategy abbreviations: `CC`, `CSP`, `PMCC`, `CSP`
 - Common words: `ETF`, `RSI`, `MACD`, `DJI`, `AM`, `PM`
 - Financial acronyms: `FDA`, `SEC`, `FED`, `CPI`, `PPI`, etc.
+- **Note:** Major tickers like NVDA, TSLA, AAPL, MSFT, AMZN, GOOGL, META are NOT in the blocklist — they are real tickers and must pass through.
 
 ## Database Schema
 
@@ -149,3 +150,9 @@ C:\DiscordData\
 6. **LEAPS not recognized** — parser now detects "LEAPS"/"LEAP" strategy, defaults option_type to CALL
 7. **LEAPS messages skipped** — signal filter now allows LEAPS through without literal "call"/"put" in text
 8. **Cursor behind — messages missed** — channel 2 cursor `last_message_id` set to unsaved message ID; fix: manually update cursor to newest saved message ID in `discord_channel`
+9. **NVDA/TSLA/AAPL/MSFT/AMZN/GOOGL/META filtered as tickers** — these real tickers were in COMMON_WORDS blocklist, causing wrong ticker extraction (e.g. MA instead of NVDA). Removed from blocklist.
+10. **Month-name expiry not parsed** — `EXPIRY_RE` only matched numeric format like `10/16/2026`. Added support for `OCT 16, 2026` format.
+11. **`Strike(s): $560` not matched** — the `(s)` in the label broke the strike regex. Updated to `strike(?:\s*\(s\))?`.
+12. **`Strategy: CSP` not detected as strategy** — `STRATEGY_LINE_RE` used `^` anchor (line start), but `clean_text` collapses newlines to spaces, so "Strategy:" was never at line start. Removed `^` anchor.
+13. **`CSP`/Sold Put/CC/Covered Call not mapped to option_type** — parser only checked raw `call`/`put` keywords. Added strategy-based option_type inference: CSP/Sold Put → PUT, CC/Covered Call → CALL.
+14. **Premium $10.80 not captured for CSP** — CSP messages use `Entry: $10.80 credit` (not `Premium:`). Added credit-pattern detection for CSP/Sold Put to capture entry credit as premium.
