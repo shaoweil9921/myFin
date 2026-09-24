@@ -338,7 +338,7 @@ python pdf_remove_logos.py <input.pdf> <output.pdf> --pages 1,2,3
 - Dropped from DB and schema — `stock_ticker` used for both STOCK and OPTION signals
 
 ## Open Items (as of 2026-09-20)
-- **Schwab API**: OAuth blocked - codes expire ~75s, gateway intercepts Tailscale redirects. ⚠️ Token likely expired (last known refresh before Aug 7). Re-auth needed.
+- **Schwab API**: REFRESH TOKEN REVOKED (2026-09-23). Needs full re-auth. Redirect URI changed to `https://127.0.0.1:9876/schwab`. Docs: `docs/SCHWAB_OAUTH.md`. User wants to re-auth tomorrow.
 - **Browser MCP**: restart needed occasionally (Chrome DevTools timeout after screenshots).
 - **Telegram heartbeat alerts**: @heartbeat chat not found since Jul 30 — Telegram channel misconfigured. Alerts are silently failing.
 - **Condo sale**: HOA approval still pending since Jul 30 (~7+ weeks). Likely stalled.
