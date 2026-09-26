@@ -337,6 +337,17 @@ python pdf_remove_logos.py <input.pdf> <output.pdf> --pages 1,2,3
 ### Refactor: removed underlying_ticker
 - Dropped from DB and schema — `stock_ticker` used for both STOCK and OPTION signals
 
+## Schwab OAuth Re-auth (2026-09-24, BLOCKED)
+- ⚠️ DO NOT restart cloudflared or Python server without user's confirmation first
+- User updates callback URL in Schwab portal before each auth attempt
+- Refresh token revoked on 2026-09-23. Full OAuth flow needed.
+- **BLOCKED**: App in "Modification Pending" state — Schwab hasn't approved the redirect URI change yet.
+- cloudflared tunnel works: `cloudflared.exe tunnel --url http://localhost:9876`
+- Python redirect server: `workspace/schwab_redirect_server.py` — update `REPLACE_WITH_CURRENT_CLOUDFLARED_URL` with actual URL each time
+- Auth URL: `https://api.schwabapi.com/v1/oauth/authorize?client_id=ydIVYBppTj7v8z3KnOfZngGgXNfSWswlwK4HwhVmfC1GURGn&redirect_uri=<cloudflared_url>&response_type=code`
+- Token file: `~/.schwab_tokens.json`
+- Tailscale serve approach FAILED: daemon on Windows can't reach user-session 127.0.0.1 (network isolation issue)
+
 ## Open Items (as of 2026-09-20)
 - **Schwab API**: REFRESH TOKEN REVOKED (2026-09-23). Needs full re-auth. Redirect URI changed to `https://127.0.0.1:9876/schwab`. Docs: `docs/SCHWAB_OAUTH.md`. User wants to re-auth tomorrow.
 - **Browser MCP**: restart needed occasionally (Chrome DevTools timeout after screenshots).
@@ -524,32 +535,49 @@ Set-Service -Name RPCPerformanceService -StartupType Disabled; Stop-Service -Nam
 
 ---
 
-## QuantDinger (2026-03-20)
+## QuantDinger (2026-09-25)
 
-### What
-- AI-driven quantitative trading platform
-- Self-hosted, Docker-based
-- URL: http://localhost:8889
+### Status
+- Repo cloned at `C:\QuantDinger` (latest from GitHub)
+- Docker Desktop installed (v29.8.0) — WSL2 installed, reboot required
+- Docker Desktop unable to start BEFORE reboot (expected — WSL just installed)
+- Installer saved at `C:\temp\docker_install.exe`
 
-### Admin Credentials
+### What to do after reboot
+1. Start Docker Desktop: `Start-Process 'C:\Program Files\Docker\Docker\Docker Desktop.exe'`
+2. Wait ~60s for Docker engine to start
+3. Verify: `& 'C:\Program Files\Docker\Docker\resources\bin\docker.exe' info`
+4. Configure `.env` and `backend.env` in `C:\QuantDinger`
+5. Run: `docker compose -f docker-compose.ghcr.yml up -d`
+6. Access at http://localhost:8889
+
+### Admin Credentials (from install.ps1)
 - Username: quantdinger
 - Password: YourSecurePass123!
 - Email: shaowei_l.j@hotmail.com
 
-### Docker Containers
+### Docker Containers (from docker-compose.ghcr.yml)
 - quantdinger-frontend (port 8889)
-- quantdinger-backend (port 5001)
-- quantdinger-db (port 5433)
+- quantdinger-mobile (port 8889 H5)
+- quantdinger-backend (port 5000/127.0.0.1)
+- quantdinger-db (port 5432/127.0.0.1)
+- quantdinger-redis (port 6379/127.0.0.1)
+- prometheus (port 9090)
+- alertmanager (port 9093)
+- grafana (port 3000)
 
 ### Database
-- Host: 127.0.0.1:5433
+- Host: 127.0.0.1:5432
 - User: quantdinger
 - Password: quantdinger123
-- Data dir: /var/lib/postgresql/data
 
-### API Keys
-- LLM Provider: deepseek
-- DeepSeek API Key: <DEEPSEEK_API_KEY>
+### Config Files Needed
+- `C:\QuantDinger\.env` — orchestration config (set `IMAGE_TAG=v5.3.1`, frontend URL, ports)
+- `C:\QuantDinger\backend.env` — runtime secrets (admin credentials, DB password, DeepSeek key)
+
+### Previous Install (2026-03-20, STALE — path was C:\Users\shaow\QuantDinger)
+- Username: quantdinger / Password: YourSecurePass123!
+- DB: 127.0.0.1:5433
 
 ### Project Location
 - C:\Users\shaow\QuantDinger
@@ -744,3 +772,35 @@ To run the same analysis next week:
 - Alert for TAL +16.16% on Jul 30 failed
 - @heartbeat chat not found — Telegram channel misconfigured
 - Heartbeat currently running but alerts not reaching user
+
+## QuantDinger (C:\QuantDinger)
+
+### Startup (after Docker Desktop install/reboot)
+Docker Desktop occupies port 5432 for its own PostgreSQL, conflicting with fintech DB on same port.
+
+```powershell
+Start-Process "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+# Wait ~30s
+$env:DB_PORT="127.0.0.1:5433"
+docker compose -f C:\QuantDinger\docker-compose.yml up -d
+```
+
+### URLs (all localhost)
+- Frontend (web): http://localhost:8888
+- Mobile H5: http://localhost:8889
+- Backend API: http://localhost:5000
+
+### Common Commands
+```powershell
+# Stop: docker compose -f C:\QuantDinger\docker-compose.yml down
+# Logs: docker compose -f C:\QuantDinger\docker-compose.yml logs -f backend
+# Restart: docker compose -f C:\QuantDinger\docker-compose.yml restart backend
+# Full rebuild: $env:DB_PORT="127.0.0.1:5433"; docker compose -f C:\QuantDinger\docker-compose.yml up -d --build
+```
+
+### Ports
+- 8888: Frontend
+- 8889: Mobile H5
+- 5000: Backend API
+- 5433: QuantDinger postgres (maps to 5432 inside container, avoids fintech DB on 5432)
+- 6379: Redis
