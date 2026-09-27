@@ -126,7 +126,7 @@ def render_note(rows, issue_date):
 
     # Group table
     group_table_lines = []
-    for grp, cnt in sorted(group_counter.items()):
+    for grp, cnt in sorted(group_counter.items(), key=lambda x: int(x[0].replace('Grp',''))):
         symbols_in_group = [r[1] for r in rows if r[4] == grp]
         group_table_lines.append(f"| {grp} | {cnt} | {', '.join(symbols_in_group)} |")
 
