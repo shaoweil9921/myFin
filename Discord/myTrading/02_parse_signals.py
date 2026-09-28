@@ -98,6 +98,48 @@ COMMON_WORDS = {
 # ──────────────────────────────────────────────────────────────
 # HELPERS
 # ──────────────────────────────────────────────────────────────
+# Patterns for extracting coach name and date from first line of signal messages.
+# Full format:  "Coach Baylor — 09/28/26 11:26 AM"
+# Date-absent:  "TradingWithAshley — 12:05 PM"  (date will be passed in as fallback)
+COACH_DATE_RE = re.compile(
+    r'^([A-Za-z][A-Za-z0-9 ]+?)\s*[-—]\s*(?:(\d{1,2}/\d{1,2}/\d{2,4})\s+)?(\d{1,2}:\d{2})\s*(?:AM|PM)',
+    re.IGNORECASE
+)
+
+def extract_coach_and_date(content, fallback_date=None):
+    """
+    Extract coach name and signal date from the first line of a message.
+    Returns (coach_name, signal_date) — both None if not matched.
+
+    Two formats handled:
+      "Coach Baylor — 09/28/26 11:26 AM"  -> ("Coach Baylor", date(2026, 9, 28))
+      "TradingWithAshley — 12:05 PM"         -> ("TradingWithAshley", fallback_date)
+
+    fallback_date is used when the first line has no date (just CoachName — Time).
+    """
+    if not content:
+        return None, None
+    first_line = content.split('\n', 1)[0]
+    m = COACH_DATE_RE.match(first_line.strip())
+    if not m:
+        return None, None
+    coach_name = m.group(1).strip()
+    date_str = m.group(2)   # may be None if no date in first line
+    signal_date = None
+    if date_str:
+        try:
+            parts = date_str.split('/')
+            month, day, year = int(parts[0]), int(parts[1]), int(parts[2])
+            if year < 100:
+                year += 2000
+            signal_date = date(year, month, day)
+        except (ValueError, IndexError):
+            signal_date = None
+    if signal_date is None:
+        signal_date = fallback_date
+    return coach_name, signal_date
+
+# ──────────────────────────────────────────────────────────────
 
 def clean_text(text):
     if not text:
@@ -247,25 +289,33 @@ def parse_msg(msg_row, conn):
     if not content:
         return []
 
+    # Derive fallback date from Discord timestamp before calling the extractor
+    ts_for_fallback = author_posted_at if author_posted_at else msg_ts
+    if ts_for_fallback:
+        if isinstance(ts_for_fallback, str):
+            try:
+                fallback_date = datetime.fromisoformat(ts_for_fallback.replace('Z', '+00:00')).date()
+            except ValueError:
+                fallback_date = date.today()
+        elif isinstance(ts_for_fallback, datetime):
+            fallback_date = ts_for_fallback.date()
+        else:
+            fallback_date = date.today()
+    else:
+        fallback_date = date.today()
+
+    # Extract coach name and signal date from first line of the message content
+    # Pass fallback_date for "CoachName — Time" format (no date in first line)
+    coach_name, signal_date = extract_coach_and_date(content, fallback_date=fallback_date)
+    if coach_name:
+        author_username = coach_name
+    if signal_date is None:
+        signal_date = fallback_date
+
     cleaned = clean_text(content)
     tickers = extract_tickers(cleaned)
     if not tickers:
         return []
-
-    # Determine signal_date — prefer author's embedded timestamp over Discord server timestamp
-    ts_for_date = author_posted_at if author_posted_at else msg_ts
-    if ts_for_date:
-        if isinstance(ts_for_date, str):
-            try:
-                signal_date = datetime.fromisoformat(ts_for_date.replace('Z', '+00:00')).date()
-            except ValueError:
-                signal_date = date.today()
-        elif isinstance(ts_for_date, datetime):
-            signal_date = ts_for_date.date()
-        else:
-            signal_date = date.today()
-    else:
-        signal_date = date.today()
 
     # Get account_id
     cur = conn.cursor()
