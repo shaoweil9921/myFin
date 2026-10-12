@@ -28,7 +28,7 @@ DB_CONFIG = {
     "host": "127.0.0.1",
     "port": 5432,
     "user": "postgres",
-    "password": os.environ.get("DB_PASSWORD", ""),
+    "password": os.environ.get("DB_PW", ""),
     "dbname": "fintech",
 }
 
@@ -231,6 +231,7 @@ def process_message(msg_id, conn, reprocess=False):
 def main():
     parser = argparse.ArgumentParser(description="Save Coach Steve's weekly MACD messages to Obsidian")
     parser.add_argument("--msg-id", type=str, help="Process specific message ID")
+    parser.add_argument("--date", type=str, help="Process message for a specific date (YYYY-MM-DD)")
     parser.add_argument("--reprocess", action="store_true", help="Overwrite existing files")
     args = parser.parse_args()
 
@@ -243,6 +244,36 @@ def main():
         if success:
             processed.add(args.msg_id)
             save_processed(processed)
+    elif args.date:
+        # Single date — find the message for that date
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT message_id, created_at, local_image_path
+            FROM discord_message
+            WHERE channel_id = %s
+              AND DATE(created_at AT TIME ZONE 'America/New_York') = %s
+              AND local_image_path IS NOT NULL
+              AND local_image_path != %s
+            ORDER BY created_at DESC
+            LIMIT 1
+        """, (CHANNEL_ID, args.date, "[]"))
+        row = cur.fetchone()
+        cur.close()
+        if not row:
+            print(f"[SKIP] No weekly MACD message found for {args.date}")
+        else:
+            msg_id, created_at, local_image_path = row
+            msg_date = get_msg_date(str(created_at))
+            obs_path = Path(OBSIDIAN_FOLDER) / f"{msg_date}_sector_macd.md"
+            if not args.reprocess and str(msg_id) in processed:
+                print(f"[SKIP] Already processed: {msg_id}")
+            elif not args.reprocess and obs_path.exists():
+                print(f"[SKIP] File exists: {obs_path.name}")
+            else:
+                print(f"Processing message {msg_id} ({msg_date})")
+                if process_message(msg_id, conn, reprocess=args.reprocess):
+                    processed.add(str(msg_id))
+                    save_processed(processed)
     else:
         # All new messages from swl-coach-weekly
         cur = conn.cursor()
