@@ -245,35 +245,82 @@ def main():
             processed.add(args.msg_id)
             save_processed(processed)
     elif args.date:
-        # Single date — find the message for that date
+        # Single date — collect ALL messages and ALL images for that date
         cur = conn.cursor()
         cur.execute("""
-            SELECT message_id, created_at, local_image_path
+            SELECT message_id, author_username, content, created_at, local_image_path
             FROM discord_message
             WHERE channel_id = %s
               AND DATE(created_at AT TIME ZONE 'America/New_York') = %s
-              AND local_image_path IS NOT NULL
-              AND local_image_path != %s
-            ORDER BY created_at DESC
-            LIMIT 1
-        """, (CHANNEL_ID, args.date, "[]"))
-        row = cur.fetchone()
+            ORDER BY created_at ASC
+        """, (CHANNEL_ID, args.date))
+        rows = cur.fetchall()
         cur.close()
-        if not row:
-            print(f"[SKIP] No weekly MACD message found for {args.date}")
+
+        if not rows:
+            print(f"[SKIP] No messages found for {args.date}")
         else:
-            msg_id, created_at, local_image_path = row
-            msg_date = get_msg_date(str(created_at))
-            obs_path = Path(OBSIDIAN_FOLDER) / f"{msg_date}_sector_macd.md"
-            if not args.reprocess and str(msg_id) in processed:
-                print(f"[SKIP] Already processed: {msg_id}")
-            elif not args.reprocess and obs_path.exists():
-                print(f"[SKIP] File exists: {obs_path.name}")
+            # Collect all images and the best text content
+            all_image_paths = []
+            best_content = ""
+            best_author = ""
+            best_created_at = None
+
+            for msg_id, author, content, created_at, local_image_path_json in rows:
+                # Track best content (non-empty, prefer first)
+                if content and not best_content:
+                    best_content = content
+                    best_author = author or "Coach Steve"
+                    best_created_at = created_at
+
+                # Collect images
+                if local_image_path_json:
+                    try:
+                        paths = json.loads(local_image_path_json)
+                        if isinstance(paths, list):
+                            for p in paths:
+                                if p and os.path.exists(p) and p not in all_image_paths:
+                                    all_image_paths.append(p)
+                    except Exception:
+                        pass
+
+            if not all_image_paths:
+                print(f"[SKIP] No valid images found for {args.date}")
+            elif not best_content:
+                print(f"[SKIP] No text content found for {args.date}")
             else:
-                print(f"Processing message {msg_id} ({msg_date})")
-                if process_message(msg_id, conn, reprocess=args.reprocess):
+                msg_date = get_msg_date(str(best_created_at))
+                obs_path = Path(OBSIDIAN_FOLDER) / f"{msg_date}_sector_macd.md"
+                msg_id = rows[0][0]  # use first message ID for tracking
+
+                if not args.reprocess and str(msg_id) in processed:
+                    print(f"[SKIP] Already processed: {msg_id}")
+                elif not args.reprocess and obs_path.exists():
+                    print(f"[SKIP] File exists: {obs_path.name}")
+                else:
+                    print(f"Processing date {msg_date} — {len(all_image_paths)} image(s), {len(rows)} message(s)")
+
+                    # Route images: att_0 = MACD table, att_1 = What's Changed, rest = extras
+                    table_path = next((p for p in all_image_paths if "_att_0." in p), all_image_paths[0])
+                    changed_path = next((p for p in all_image_paths if "_att_1." in p), None)
+
+                    print(f"  Extracting MACD table from: {os.path.basename(table_path)}")
+                    table_data = extract_macd_table(table_path)
+
+                    whats_changed = ""
+                    if changed_path:
+                        print(f"  Extracting What's Changed from: {os.path.basename(changed_path)}")
+                        whats_changed = extract_whats_changed(changed_path)
+
+                    content_md = build_obsidian_content(
+                        msg_date, best_author, best_content, table_data, whats_changed, all_image_paths
+                    )
+                    with open(obs_path, "w", encoding="utf-8") as f:
+                        f.write(content_md)
+
                     processed.add(str(msg_id))
                     save_processed(processed)
+                    print(f"  [OK] Saved: {obs_path.name}")
     else:
         # All new messages from swl-coach-weekly
         cur = conn.cursor()
