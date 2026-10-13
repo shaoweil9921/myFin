@@ -41,7 +41,7 @@ Capture what matters. Decisions, context, things to remember. Skip the secrets u
 - **Memory is limited** — if you want to remember something, WRITE IT TO A FILE
 - "Mental notes" don't survive session restarts. Files do.
 - When someone says "remember this" → update `memory/YYYY-MM-DD.md` or relevant file
-- When you learn a lesson → update AGENTS.md, TOOLS.md, or the relevant skill
+- When you learn a lesson → update AGENTS.md or the relevant skill
 - When you make a mistake → document it so future-you doesn't repeat it
 - **Text > Brain** 📝
 
@@ -62,6 +62,15 @@ Capture what matters. Decisions, context, things to remember. Skip the secrets u
 - Use subfolders to organize (e.g. `finviz/finviz_pipeline.py`, `ibd/extract_ibd50.py`)
 - After pushing, update MEMORY.md with the repo URL and folder structure.
 - If you're not sure whether something is worth committing, lean toward committing it.
+
+## Script Defaults
+
+**When creating or updating scripts that will run as cron jobs, the default behavior must be parameterized (accept CLI arguments).**
+
+- Scripts should accept `--date` or equivalent parameters as the **default entry point**, not require interactive prompting.
+- Example: `python script.py --date 2026-10-11` to process a specific date.
+- This applies to any script that processes data by date — it should work standalone without me needing to manually edit the script first.
+- If a script has no date parameter, I should add one when setting up or fixing the cron job.
 
 ## External vs Internal
 
@@ -126,7 +135,9 @@ Reactions are lightweight social signals. Humans use them constantly — they sa
 
 ## Tools
 
-Skills provide your tools. When you need one, check its `SKILL.md`. Keep local notes (camera names, SSH details, voice preferences) in `TOOLS.md`.
+### Local notes
+
+Skills define how tools work. Keep environment-specific local notes in this section.
 
 **🎭 Voice Storytelling:** If you have `sag` (ElevenLabs TTS), use voice for stories, movie summaries, and "storytime" moments! Way more engaging than walls of text. Surprise people with funny voices.
 
@@ -135,6 +146,106 @@ Skills provide your tools. When you need one, check its `SKILL.md`. Keep local n
 - **Discord/WhatsApp:** No markdown tables! Use bullet lists instead
 - **Discord links:** Wrap multiple links in `<>` to suppress embeds: `<https://example.com>`
 - **WhatsApp:** No headers — use **bold** or CAPS for emphasis
+
+### Local notes (migrated from TOOLS.md)
+
+# TOOLS.md - Local Quick Reference
+
+_Lightweight cheat-sheet for this workspace. See AGENTS.md for full coding standards._
+
+---
+
+## Database Connections
+
+**ALWAYS use PostgreSQL.** SQLite is never acceptable.
+
+```python
+# ✅ Correct — psycopg2
+import psycopg2
+conn = psycopg2.connect(
+    host='127.0.0.1', port=5432,
+    dbname='fintech', user='postgres',
+    password=os.environ.get("DB_PASSWORD", "")
+)
+
+# ❌ Wrong — sqlite3 (never do this)
+import sqlite3
+conn = sqlite3.connect('something.db')  # WRONG
+```
+
+**Password env var:** `DB_PASSWORD` (Windows user env var)
+
+**Key tables in `fintech`:**
+
+| Table | Purpose |
+|-------|---------|
+| `stock_technical` | NVDA daily OHLCV + indicators, RSI, MACD |
+| `discord_trade_signal` | Parsed trade signals from Discord |
+| `discord_channel` | Discord channel metadata |
+| `discord_message` | Raw Discord messages |
+| `stock_price` | Daily price data |
+| `stock_watchlist` | Watched tickers |
+| `ibd_50_summary` | IBD 50 extraction results |
+| `jarsy_asset` | Jarsy token list |
+| `finviz_screener` | Finviz screener results |
+
+---
+
+## Platform Paths
+
+- **Workspace:** `C:\Users\shaowei_l\.openclaw\workspace\`
+- **Discord pipeline:** `C:\Users\shaowei_l\.openclaw\workspace\Discord\myTrading\`
+- **Obsidian vault:** `C:\Data\Obsidian_root\Obsidian_trading\`
+- **Logs:** `D:\mylogs\openclaw\` (breakdown by year)
+
+
+
+# TOOLS.md - Local Notes
+
+Skills define _how_ tools work. This file is for _your_ specifics — the stuff that's unique to your setup.
+
+## What Goes Here
+
+Things like:
+
+- Camera names and locations
+- SSH hosts and aliases
+- Preferred voices for TTS
+- Speaker/room names
+- Device nicknames
+- Anything environment-specific
+
+## Examples
+
+```markdown
+### Cameras
+
+- living-room → Main area, 180° wide angle
+- front-door → Entrance, motion-triggered
+
+### SSH
+
+- home-server → 192.168.1.100, user: admin
+
+### TTS
+
+- Preferred voice: "Nova" (warm, slightly British)
+- Default speaker: Kitchen HomePod
+```
+
+## Why Separate?
+
+Skills are shared. Your setup is yours. Keeping them apart means you can update skills without losing your notes, and share skills without leaking your infrastructure.
+
+---
+
+## OpenClaw Log & Backup Location
+
+All OpenClaw-related logs and backups → `D:\mylogs\openclaw\` (breakdown by year, e.g. `D:\mylogs\openclaw\2026\`)
+
+---
+
+Add whatever helps you do your job. This is your cheat sheet.
 
 ## 💓 Heartbeats - Be Proactive!
 
@@ -252,3 +363,20 @@ When the user asks me to do a coding task, apply these rules:
 - Workspace: C:\Users\shaow\.openclaw\workspace\
 - Model: MiniMax-M2.7 (configured in ~/.claude/settings.json)
 - Key projects: stock_app.py, Finviz scraper, IBD pipeline, QuantDinger
+
+### Database: PostgreSQL Only
+**Never use SQLite.** All application data is in the local PostgreSQL `fintech` database at `127.0.0.1:5432` (user: `postgres`, password via `DB_PASSWORD` env var).
+
+**Correct pattern:**
+```python
+import psycopg2
+conn = psycopg2.connect(host='127.0.0.1', port=5432, dbname='fintech', user='postgres', password=***'DB_PASSWORD', ''))
+```
+
+**Wrong — never do this:**
+```python
+import sqlite3
+conn = sqlite3.connect('something.db')  # ❌
+```
+
+**Key tables:** `stock_technical`, `discord_trade_signal`, `stock_price`, `stock_watchlist`, `ibd_50_summary`, `jarsy_asset`, `finviz_screener`, `discord_channel`, `discord_message`
