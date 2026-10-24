@@ -1,5 +1,35 @@
 # MEMORY.md - Long-term Memory
 
+## CRITICAL: PostgreSQL Only — Never SQLite
+
+All application data lives in `fintech` PostgreSQL at `127.0.0.1:5432`. SQLite is never used.
+- User: `postgres`, password via `DB_PASSWORD` env var
+- Always: `import psycopg2` — never `import sqlite3`
+- If any script or job uses `sqlite3` or creates `.db` files → wrong, fix immediately
+- Key tables: `stock_technical`, `discord_trade_signal`, `stock_price`, `stock_watchlist`, `ibd_50_summary`, `jarsy_asset`, `finviz_screener`, `discord_channel`, `discord_message`
+
+---
+
+## CRON JOBS — CRITICAL REMINDER (updated 2026-10-15)
+
+**All cron job automations are stored in `openclaw.sqlite`** at:
+`C:\Users\shaowei_l\AppData\Roaming\npm\node_modules\openclaw\openclaw.sqlite`
+
+**This database was wiped at 11:27 PM on 2026-10-15** (gateway restart caused it to be reset to 0 bytes). ALL cron jobs were lost.
+
+**Before any gateway restart, export the automations:**
+1. Run `automations(action="list", includeDisabled=true)` to get all job configs
+2. Save the output to `memory/automations-backup-YYYY-MM-DD.json`
+3. Commit to GitHub
+
+**Watchdog cron job** — was monitoring all cron jobs and alerting on failures. Was lost in the 2026-10-15 wipe. Must be recreated.
+
+**TODO (deferred, user has no time now):**
+1. Fix heartbeat session - it gives false "0 signals" reports when pipeline actually finds signals. The `sessions_spawn` subprocess output may not be captured correctly. Consider either: (a) approving exec for heartbeat session, or (b) removing pipeline work from heartbeat entirely and relying on cron only
+2. Recreate all lost cron jobs from memory of what they were
+3. Fix `generate_daily_signals.py` to use `--date` parameter (was partially done but not fully tested)
+4. Investigate why openclaw.sqlite gets wiped on gateway restart — is there a migration or init that resets it?
+
 ## Schaeffer's Investment Research Subscriptions
 
 ### Database (fintech PostgreSQL)
@@ -25,7 +55,7 @@
 
 ---
 
-## IBD 50 Extraction (2026-08-30 — updated)
+## IBD 50 Extraction (updated 2026-09-28)
 
 ### Background
 - Extracting IBD 50 stock lists from eIBD PDF magazines
@@ -57,6 +87,8 @@
 - B3/B4: 5 missing symbols patched manually (ZETA, LLY, BURL, TSM, INSW)
 - 50/50 company descriptions, 50/50 prices (no $ sign)
 - CSVs saved to `C:\DolphinShare\IBD\2026\Processed\`
+- **Latest extraction: 2026-09-28** — v9 completed for Aug 10/17 files, all 50 symbols verified ✓
+- **2026-10-04:** Loaded Jul 13 + Jul 06 (modified b CSVs) → DB (`ibd_50_group`, `ibd_50_new`, `ibd_company`) + Obsidian files. User ran scripts manually (exec broken). Aug 03/Sep 28/Oct 05: Obsidian files existed, DB not loaded.
 
 ### Key Algorithm Details (v26)
 - Rank marker y-positions: ranks 1-50 at ~27px intervals starting at y~326
@@ -83,22 +115,49 @@
 ### GitHub
 - Repo: **shaoweil9921/myFin** (https://github.com/shaoweil9921/myFin)
 - IBD scripts: `ibd/` subfolder
-- Files: `extract_ibd50.py` (v27), `build_symbol_list.py`, `ibd_symbol_list.csv` (72 unique symbols)
+- Files: `extract_ibd50.py` (v9, latest from 2026-09-28), `build_symbol_list.py`, `ibd_symbol_list.csv` (72 unique symbols)
 - Workspace git repo: `C:\Users\shaowei_l\.openclaw\workspace\.git` (remote → myFin)
 
 ---
 
-## OpenClaw Skills
+### IBD Industry Group Rankings (IGR) — 2026-09-27
+- **Table:** `fintech.ibd_industry_group_rankings`
+- **Script:** `ibd/extract_groups.py` (two-pass PyMuPDF extraction)
+- **CSV:** `ibd/igr_aug03.csv` (142 entries from eIBD_080326.pdf)
+- **Columns:** id, issue_date, rank, prev_group_rank, group_name, composite_rating, ytd_pct, wk3_pct
+- **Coverage:** Ranks 1-142 (of 197 total groups) — Aug 3, 2026 issue
+  - 138 entries with full data (rating + ytd + wk3)
+  - 4 entries missing rating (ranks 114, 116, 123, 124) — PDF rendering artifacts
+  - Ranks 143-197 not present in this issue's PDF
+- **Extraction approach:** Pass 1 = block-level regex on full page text; Pass 2 = secondary regex for entries missing rating
+- **GitHub:** Committed to myFin repo (`ibd/extract_groups.py`, `ibd/igr_aug03.csv`)
 
-### Installed Skills
-- **tavily** - AI web search
-- **finance-lite** - Daily market brief
-- **stock-watcher** - Stock watchlist (A-shares)
-- **stock-research-engine** - Stock research
+## fintech DB — Full Table List
+- `discord_message` — raw Discord messages
+- `discord_trade_signal` — parsed trading signals
+- `discord_channel` — tracked channels (id, discord_id, name, category)
+- `discord_account` — bot accounts
+- `finviz_screener` — screener definitions
+- `finviz_screener_scan_result` — screener stock results
+- `finviz_screener_scan_result_summary` — scan summary stats
+- `scan` — extraction scan metadata
+- `jarsy_asset` / `jarsy_asset_live` — Jarsy token data
+- `subscription_letter` — Schaeffers letter records
+- `subscription_letter_position` — letter option positions
+- `market_holidays` — holiday calendar
+- `stock_technical` / `stock_technical_intraday` — OHLCV + indicators
+- `stock_watchlist` — watched tickers
+- `ibd_50_summary` / `ibd_50_new` — IBD 50 data
+- `ibd_industry_group_rankings` — IGR data
 
-### API Keys
-- Tavily: YOUR_TAVILY_KEY
-- Finnhub: YOUR_FINNHUB_KEY
+## fintech DB — Backup System
+- **Backup dir:** `C:\Data\postgres_backup\`
+- **Schedule:** Saturday 1:00 PM ET (backup), Monday 9:00 AM ET (monitor)
+- **Retention:** Last 4 weekly backups (auto-cleanup)
+- **Alert:** Telegram message if no backup for current week
+- **Scripts:** `backup_fintech.py`, `check_backup.py` (in `Obsidian_trading\database\`)
+- **Restore:** `gunzip -c fintech_YYYY-MM-DD.sql.gz | psql -h 127.0.0.1 -p 5432 -U postgres -d fintech`
+- **pg_dump path:** `C:\Program Files\PostgreSQL\18\bin\pg_dump.exe`
 
 ---
 
@@ -320,13 +379,55 @@ python pdf_remove_logos.py <input.pdf> <output.pdf> --pages 1,2,3
 - Channel 2 cursor never set: set to 1551058724251111567
 - stock_ticker NULL for OPTIONS: only underlying_ticker was set, backfilled
 
-### Current Signals in DB
-| id | ticker | asset | strategy | strike | premium |
-|----|--------|-------|----------|--------|---------|
-| 2 | GGLL | STOCK | — | — | — |
-| 3 | SOFI | OPTION | Covered Call | 18.50 | — |
-| 35 | MU | OPTION | Covered Call | 1000 | 2.72 |
-| 36 | NBIS | OPTION | Covered Call | 235 | 1.4 |
+### Bug Fixed (2026-10-10) — option_type not set from strategy line
+**Problem:** Signals like "Wheel cash secured puts" and "Wheel covered calls" were skipped
+because `option_type` was not being inferred from the strategy text.
+**Root cause:** The regex patterns had trailing `\b` word boundaries:
+- `\bcash.?secured.?put\b` — `\b` after `put` fails when text is "puts" (no word boundary after `puts`)
+- `\bcovered.?call\b` — same issue with "calls"
+**Fix:** Remove trailing `\b` from put/call patterns AND add `wheel.*put` / `wheel.*call` fallback:
+```python
+# Before (fails on "puts", "calls"):
+r'\bcash.?secured.?put\b'
+r'\bcovered.?call\b'
+
+# After (matches both singular and plural):
+r'\bcash.?secured.?put'   # no trailing \b
+r'\bcovered.?call'         # no trailing \b
+# Also add wheel strategy matching:
+r'wheel.*put'
+r'wheel.*call'
+```
+
+### generate_daily_signals.py — --date Parameter (2026-10-10)
+- `--date YYYY-MM-DD` argument: generates signals file for a specific date
+- Query uses `WHERE s.signal_date = %s` (not `created_at`)
+- Early exit if no signals found for that date
+```bash
+python generate_daily_signals.py --date 2026-10-09  # backfill
+python generate_daily_signals.py                    # today (default)
+```
+- Also added to `02_parse_signals.py` — `--date` mode fetches messages where `DATE(created_at AT TIME ZONE 'America/New_York') = specified_date`
+
+### Signals Dashboard — Obsidian DataviewJS (2026-10-11)
+- Created `Ashley_trading/Signals-Dashboard.md` with DataviewJS:
+  - Active Signals table (all signals from all daily files)
+  - By Ticker view / By Coach view
+  - Expiring Soon (< 7 days) view
+  - Recent Files table
+- Template: `templates/Signals-Dashboard-Template.md`
+- Requires Obsidian Dataview plugin
+- `dv.paragraph()` → use `dv.el("p", ...)` for compatibility
+
+### Current Signals in DB (updated 2026-10-11)
+| id | ticker | asset | strategy | strike | premium | notes |
+|----|--------|-------|----------|--------|---------|-------|
+| 2 | GGLL | STOCK | — | — | — | |
+| 3 | SOFI | OPTION | Covered Call | 18.50 | — | |
+| 35 | MU | OPTION | Covered Call | 1000 | 2.72 | |
+| 36 | NBIS | OPTION | Covered Call | 235 | 1.4 | |
+| Oct 9 | MP | OPTION | PUT | $42.5 | $0.55 | exp 2026-10-23, Coach Baylor |
+| Oct 9 | TNA | OPTION | CALL | $68.0 | $0.60 | exp 2026-11-06, Coach Baylor |
 
 ### Channels
 | db_id | discord_id | name | cursor |
@@ -348,16 +449,33 @@ python pdf_remove_logos.py <input.pdf> <output.pdf> --pages 1,2,3
 - Token file: `~/.schwab_tokens.json`
 - Tailscale serve approach FAILED: daemon on Windows can't reach user-session 127.0.0.1 (network isolation issue)
 
-## Open Items (as of 2026-09-20)
+## OpenClaw Bug: DataCloneError on Isolated Sessions
+- **Issue:** https://github.com/openclaw/openclaw/issues/161272
+- ALL `sessionTarget: "isolated"` cron jobs fail with `DataCloneError` ( serialization fails in V8 isolate)
+- Also: `command` payload hardcodes `sh -lc` — doesn't exist on Windows → `spawn sh ENOENT`
+- Gateway V2026.9.9. Workaround: disable → re-enable cycle clears errors temporarily
+- Working jobs: `sessionTarget: "main"` (heartbeat, EOD Memory Save)
+
+## OpenClaw Gateway — Event Loop Blocking Issue (2026-10-11)
+- **Symptom:** Gateway took ~7 minutes to start (event loop blocked 401 seconds)
+- **Root cause:** One of 16 plugins blocked the entire Node.js event loop during `plugins.runtime-post-bind` phase
+- **Evidence:** `eventLoopDelayP99Ms=401311`, `eventLoopUtilization=1`
+- **Fix applied:** 13 unused plugins disabled to reduce startup load:
+  - Disabled: `openai`, `ollama`, `google`, `huggingface`, `alibaba`, `nvidia`, `xai`, `litellm`, `lmstudio`, `openrouter`, `opencode-go`, `sglang`, `vllm`
+  - Remaining active: `deepseek`, `tavily`, `anthropic`, `minimax`, `discord`, `telegram`, `browser`, `talk-voice`, `memory-core`, `github` + stock plugins
+- **Still not disabled:** `azure-speech`, `elevenlabs`, `deepgram`, `microsoft`, `senseaudio`, `fal`, `kie`, `runway`, `geolocation`, `web-readability`, `document-extract`, `clawrouter`, `copilot-proxy`, `microsoft-foundry`, `linux-node`
+
+## Open Items (updated 2026-10-03)
 - **Schwab API**: REFRESH TOKEN REVOKED (2026-09-23). Needs full re-auth. Redirect URI changed to `https://127.0.0.1:9876/schwab`. Docs: `docs/SCHWAB_OAUTH.md`. User wants to re-auth tomorrow.
 - **Browser MCP**: restart needed occasionally (Chrome DevTools timeout after screenshots).
-- **Telegram heartbeat alerts**: @heartbeat chat not found since Jul 30 — Telegram channel misconfigured. Alerts are silently failing.
-- **Condo sale**: HOA approval still pending since Jul 30 (~7+ weeks). Likely stalled.
-- **update_stock_data_check.py**: BROKEN - script never existed, cron job disabled (dc1ac7ed). Was supposed to run Mon-Fri 10AM-5PM to update stock data but was never created.
-- **Memory maintenance**: last done 2026-09-20 (this session)
+- **Telegram heartbeat alerts**: ✅ FIXED 2026-09-28 — target now set to `telegram`, verified working.
+- **Condo sale**: HOA approval still pending since Jul 30 (~9+ weeks). Likely stalled.
+- **update_stock_data_check.py**: EXISTS and WORKING — checks if stock data already loaded today and skips if so. Mon-Fri market hours.
+- **⛔ OpenClaw CRON BROKEN (Windows):** DataCloneError on all isolated-session jobs. `command` payloads use `sh -lc` (doesn't exist on Windows). 14+ jobs affected. Issue: #161272.
+- **Memory maintenance**: last done 2026-10-03 ✓
 
 
-## Jarsy Extraction (2026-04-06, updated 2026-09-22)
+## Jarsy Extraction (2026-04-06, updated 2026-10-11)
 
 ### Scripts
 - `jarsy_launch_and_login.py` — launches Chrome with `jarsy_profile` on debug port 9222, injects saved cookies, verifies PE content. Checks cookie freshness (max 25 days).
@@ -382,6 +500,7 @@ python pdf_remove_logos.py <input.pdf> <output.pdf> --pages 1,2,3
 - **Schedule:** Mon-Fri 10 AM ET
 - **Job ID:** d794a9c9-c4bf-4129-ab37-40d87f6dc30b
 - **Session target:** isolated
+- ⚠️ **DISABLED 2026-10-11** — Jarsy Chrome profile cache cleaned (144 MB freed). Cron job disabled.
 
 ### Real Data (Sep 22, 2026)
 - 34 presale + 29 live tokens extracted (scan_id=310).
@@ -403,6 +522,7 @@ python pdf_remove_logos.py <input.pdf> <output.pdf> --pages 1,2,3
 - `GET /marketdata/v1/quotes?symbols=USO,SPY` — real-time quotes (NOTE: ?symbols= NOT /{symbol})
 - Quote data: `extended.lastPrice` (NOT `mark`)
 - Note: `^VIX` is index, not tradable via quotes endpoint — use yfinance for VIX
+- **Stock market check**: NOT RUN recently. Last check was 2026-08-07. `update_stock_data_check.py` doesn't exist — needs to be created or the check script revised.
 
 ### Main Trading Account (#12783263)
 - Type: MARGIN (Day Trader)
@@ -496,6 +616,14 @@ Set-Service -Name RPCPerformanceService -StartupType Disabled; Stop-Service -Nam
 
 ---
 
+## Discord Tracked Channels
+| DB id | Discord Channel ID | Name | Category |
+|-------|-------------------|------|----------|
+| 1 | 1550893507118637096 | swl-small-trades | small-trades |
+| 2 | 1551368477846143006 | swl-coach-trades | coach-trades |
+| 3 | 1551368575112183808 | swl-coach-weekly | coach-weekly |
+| 4 | 1550930741309866065 | swl-challenge-trades | challenge-trades |
+
 ## Finviz GapperMid Extraction (2026-03-16)
 
 ### Background
@@ -532,6 +660,19 @@ Set-Service -Name RPCPerformanceService -StartupType Disabled; Stop-Service -Nam
 - No stored credentials - relies on existing browser login
 - Data saved with scan_id for tracking multiple runs per day
 - Constraint updated to UNIQUE(scan_id, ticker) instead of UNIQUE(screener_name, ticker)
+- **Sanity-check rows per scan**, not just scan status. A scan can be `completed` with only 2 rows (2026-10-22 scan_id 363) vs normal ~20. Query: `select scan_id, count(*) from finviz_screener_scan_result group by scan_id order by scan_id desc limit 5`. Duplicate scans get marked `skipped` by the same "already loaded today" guard that hides bad extractions.
+
+### `change_pct` Corruption (verified 2026-10-23)
+- Stored `finviz_screener_scan_result.change_pct` values can be wildly wrong vs reality (2026-10-23 scan_id 365: STLA -62.9% vs actual -7.3%, RITM +277% vs actual +6.8%, SLM/FLG/INFY/TKC also wrong).
+- Cause: computed against a stale/wrong reference price, not the prior session close. This field feeds the Telegram ">5% mover" summary, so it produces false alerts.
+- **Always sanity-check GapperMid movers against live quotes (Yahoo chart API) before reporting them.**
+- Script: `hb_quotes.py` fetches watchlist quotes; extend its WATCH list to include flagged tickers for spot checks.
+
+### DB Column Name Gotchas (verified 2026-10-22)
+- `stock_technical` date column is **`date`** (not `trade_date`); other cols: ticker, open, high, low, close, volume, rsi, macd, macd_signal, sma_20/50/200, bb_*, atr, signals, recommendation, stop_loss, tp1/2/3
+- `discord_trade_signal` uses **`stock_ticker`** (not ticker) and `asset_class`, `strategy_type`, `option_type`, `strike_price`, `entry_premium`, `expiration_date`, `author_username`, `signal_date`
+- `discord_trade_signal` has 107 rows as of 2026-10-22 (max signal_date 2026-10-22)
+- **fintech DB is reachable at `127.0.0.1:5432` from the workspace shell.** Heartbeat logs claiming "DB 10.0.0.10 unreachable (timeout)" refer to a different/legacy host — do not assume the local DB is down.
 
 ---
 
@@ -716,6 +857,12 @@ To run the same analysis next week:
 3. Check: VIX > 30? RSI oversold? Price above bounce trend line?
 4. Look at the 4 charts and compare to historical patterns
 
+## QuantDinger Docker Ports (IMPORTANT)
+- Docker Desktop occupies port 5432 for its own PostgreSQL → conflicts with fintech DB
+- Fix: QuantDinger postgres maps to container port 5432, exposed on host port **5433**
+- Connection: `host=127.0.0.1, port=5433, user=quantdinger, password=quantdinger123`
+- Frontend: http://localhost:8889 | Backend API: http://localhost:5000 | Redis: 6379
+
 ## OpenClaw PATH Fix (2026-03-29)
 - Reinstall created only .ps1 wrapper but .PS1 not in PATHEXT
 - Fix: create C:\Users\shaow\AppData\Roaming\npm\openclaw.cmd batch wrapper
@@ -751,9 +898,25 @@ To run the same analysis next week:
 - Token: <GITHUB_PAT>
 - Each vault: own .git, own remote, own GitHub repo
 
-## OpenClaw Version (2026-09-19)
-- Current: 2026.7.1-2 (upgraded from 2026.5.6, noted in daily memory)
-- Upgrades via: npm i -g openclaw@latest --no-fund --no-audit
+## OpenClaw Version
+- Current: **2026.9.9** (2026.9.8 → 2026.9.9 via npm update, 2026-10-10) — npm latest as of 2026-10-23 is **2026.10.6** (installed still trails)
+- Gateway WS URL: `ws://localhost:18789` — use `localhost` NOT `127.0.0.1` (gateway listens on IPv6 only)
+- Config: `C:\Users\shaowei_l\.openclaw\openclaw.json`
+- Workspace: `C:\Users\shaowei_l\.openclaw\workspace`
+- Upgrades via: `npm i -g openclaw@latest --no-fund --no-audit`
+
+## DeepSeek Backup Provider
+- API: OpenAI Completions compatible, base URL `https://api.deepseek.com/v1`
+- Key: `sk-caf…b368` (DeepSeek chat model)
+
+## Telegram
+- Bot token: `863194…Ul-Q`
+- My chat ID: `7923250382`
+- Gateway heartbeat target: `telegram`
+
+## Discord Bot (guild server IDs)
+- `1158828571687669800`
+- `1550885500657737748`
 
 ## Condo Sale - 450 NW 20th ST Unit 212 Boca Raton (2026-07-31, ongoing)
 - Sellers: Shaowei Luo + Fen Chen | Buyers: Alex Ramirez + Nathalie Vilvandre Ramirez
@@ -768,10 +931,11 @@ To run the same analysis next week:
 - Positions check disabled until credentials are configured
 - Key env vars needed: ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_PAPER_URL
 
-## Telegram Heartbeat Channel Issue (known since Jul 30)
-- Alert for TAL +16.16% on Jul 30 failed
-- @heartbeat chat not found — Telegram channel misconfigured
-- Heartbeat currently running but alerts not reaching user
+## Telegram Heartbeat — FIXED (2026-09-28)
+- Heartbeat was configured with `target: "none"` — silently discarding heartbeats
+- Fixed: `openclaw config set agents.entries.main.heartbeat.target telegram`
+- Verified: `agents.main.heartbeat.target` now shows `"telegram"` in health response
+- Heartbeats should now deliver to Telegram chat 7923250382 every 2h during active hours
 
 ## QuantDinger (C:\QuantDinger)
 
