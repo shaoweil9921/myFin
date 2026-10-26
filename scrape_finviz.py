@@ -1,10 +1,9 @@
-"""Scrape Finviz GapperMid screener - page 1 only (short-term fix).
-No session cookies - Finviz paginated pages return empty data rows.
+"""Scrape Finviz GapperMid screener - parse embedded JSON data.
+Finviz now embeds screener data as JSON inside a <script> tag, not in HTML tables.
 """
 import requests
-from bs4 import BeautifulSoup
+import re
 import json
-import time
 
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -16,85 +15,96 @@ HEADERS = {
 BASE_URL = 'https://finviz.com/screener.ashx?v=111&f=cap_midover,sh_curvol_o750,sh_price_o1,sh_relvol_o3&o=-change'
 
 
-def parse_page(html):
-    """Extract stock rows from Finviz screener HTML page 1."""
-    soup = BeautifulSoup(html, 'html.parser')
+def extract_screener_json(html):
+    """Extract screener data from embedded JSON <script> tag."""
+    # Finviz embeds the full screener state as JSON in a large <script> tag
+    # The JSON contains 'screenerType" : "stocks"' and a 'data' key with rows
+    # Match the opening brace of the JSON object - it's the only large JSON object with screenerType
+    scripts = re.findall(r'<script[^>]*>(.*?)</script>', html, re.DOTALL)
+    for s in scripts:
+        if 'screenerType' in s and '"data"' in s:
+            try:
+                return json.loads(s)
+            except json.JSONDecodeError:
+                pass
+    return None
 
-    # Find the screener table - it's a table with class 'screener_table'
-    tables = soup.find_all('table')
-    screener_table = None
-    for t in tables:
-        if 'screener_table' in t.get('class', []):
-            screener_table = t
-            break
 
-    if not screener_table:
-        # Try fv-container as fallback
-        fv = soup.find('div', class_='fv-container')
-        if fv:
-            tables_in_fv = fv.find_all('table')
-            for t in tables_in_fv:
-                if t.find_all('tr') and len(t.find_all('tr')) > 5:
-                    screener_table = t
-                    break
-
-    if not screener_table:
-        print("WARNING: screener_table not found!")
+def parse_stocks(data):
+    """Parse stock rows from the embedded JSON data structure."""
+    if not data or 'data' not in data:
         return []
 
     rows = []
-    trs = screener_table.find_all('tr')
-    for tr in trs:
-        cells = tr.find_all('td')
-        if not cells:
-            continue
-        # First cell should be row number
-        first = cells[0].get_text(strip=True)
-        if not first.isdigit():
-            continue
-        row_num = int(first)
-        if row_num < 1:
-            continue
-        if len(cells) < 10:
-            continue
-        # Cells: No, Ticker, Company, Sector, Industry, Country, Market Cap, P/E, Price, Change%, Volume
-        ticker = cells[1].get_text(strip=True)
-        company = cells[2].get_text(strip=True)
-        sector = cells[3].get_text(strip=True)
-        industry = cells[4].get_text(strip=True)
-        country = cells[5].get_text(strip=True)
-        market_cap = cells[6].get_text(strip=True)
-        pe = cells[7].get_text(strip=True)
-        price = cells[8].get_text(strip=True)
-        change_pct = cells[9].get_text(strip=True)
-        volume = cells[10].get_text(strip=True) if len(cells) > 10 else ''
+    screener_rows = data['data'].get('rows', [])
+    
+    for r in screener_rows:
+        text = r.get('text', {})
+        numbers = r.get('numbers', {})
+        
+        # Finviz 'change' is ALREADY a percentage (e.g. prevClose 15.75 -> price 23.20 => change 47.33)
+        # Prefer prevClose/price derivation; fall back to the raw 'change' percentage.
+        price = numbers.get('price')
+        change = numbers.get('change')
+        prev_close = numbers.get('prevClose')
+        change_pct = None
+        if prev_close and price:
+            change_pct = round((price - prev_close) / prev_close * 100, 2)
+        elif change is not None:
+            change_pct = round(change, 2)
 
+        # PE ratio from the embedded JSON (previously always dropped as empty)
+        pe_val = numbers.get('PE')
+        pe = str(round(pe_val, 2)) if pe_val else ''
+        
+        # Format market cap
+        mktcap = numbers.get('marketCap')
+        if mktcap:
+            if mktcap >= 1e12:
+                mktcap_fmt = f"{mktcap/1e12:.2f}T"
+            elif mktcap >= 1e9:
+                mktcap_fmt = f"{mktcap/1e9:.2f}B"
+            elif mktcap >= 1e6:
+                mktcap_fmt = f"{mktcap/1e6:.2f}M"
+            else:
+                mktcap_fmt = str(mktcap)
+        else:
+            mktcap_fmt = ''
+        
         rows.append({
-            'ticker': ticker,
-            'company': company,
-            'sector': sector,
-            'industry': industry,
-            'country': country,
-            'market_cap': market_cap,
+            'ticker': text.get('ticker', ''),
+            'company': text.get('company', ''),
+            'sector': text.get('sector', ''),
+            'industry': text.get('industry', ''),
+            'country': text.get('country', ''),
+            'market_cap': mktcap_fmt,
             'pe': pe,
-            'price': price,
-            'change_pct': change_pct,
-            'volume': volume,
+            'price': str(round(price, 2)) if price else '',
+            'change_pct': str(change_pct) if change_pct is not None else '',
+            'volume': str(numbers.get('volume', '')),
         })
-
+    
     return rows
 
 
 def main():
-    print(f"Fetching Finviz GapperMid screener (page 1 only)...")
+    print(f"Fetching Finviz GapperMid screener...")
     resp = requests.get(BASE_URL, headers=HEADERS, timeout=30)
     print(f"  Status: {resp.status_code}, Length: {len(resp.text)}")
 
-    rows = parse_page(resp.text)
+    data = extract_screener_json(resp.text)
+    if not data:
+        print("WARNING: Could not find screener JSON in page!")
+        return False
+
+    total = data.get('data', {}).get('totalCount', 0)
+    print(f"  Total results: {total}")
+
+    rows = parse_stocks(data)
     print(f"  Extracted: {len(rows)} rows")
 
     for r in rows[:3]:
-        print(f"  {r['ticker']}: ${r['price']}, vol={r['volume']}, chg={r['change_pct']}")
+        print(f"  {r['ticker']}: ${r['price']}, vol={r['volume']}, chg={r['change_pct']}%")
 
     out_path = r'C:\Users\shaowei_l\.openclaw\workspace\finviz_extracted_data.json'
     with open(out_path, 'w') as f:
