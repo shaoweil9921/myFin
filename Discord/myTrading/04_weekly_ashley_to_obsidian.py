@@ -260,18 +260,23 @@ def main():
         if not rows:
             print(f"[SKIP] No messages found for {args.date}")
         else:
-            # Collect all images and the best text content
+            # Collect all images and ALL text content.
+            # Coach Steve often splits one weekly post into several messages
+            # posted a few minutes apart, so merge every non-empty body
+            # (chronological) rather than keeping only the first.
             all_image_paths = []
-            best_content = ""
+            content_parts = []
             best_author = ""
             best_created_at = None
 
             for msg_id, author, content, created_at, local_image_path_json in rows:
-                # Track best content (non-empty, prefer first)
-                if content and not best_content:
-                    best_content = content
-                    best_author = author or "Coach Steve"
-                    best_created_at = created_at
+                # Collect text (skip empties — some split posts are image-only)
+                if content and content.strip():
+                    content_parts.append(content.strip())
+                    if not best_author:
+                        best_author = author or "Coach Steve"
+                    if best_created_at is None:
+                        best_created_at = created_at
 
                 # Collect images
                 if local_image_path_json:
@@ -286,9 +291,10 @@ def main():
 
             if not all_image_paths:
                 print(f"[SKIP] No valid images found for {args.date}")
-            elif not best_content:
+            elif not content_parts:
                 print(f"[SKIP] No text content found for {args.date}")
             else:
+                best_content = "\n\n".join(content_parts)
                 msg_date = get_msg_date(str(best_created_at))
                 obs_path = Path(OBSIDIAN_FOLDER) / f"{msg_date}_sector_macd.md"
                 msg_id = rows[0][0]  # use first message ID for tracking
@@ -298,7 +304,8 @@ def main():
                 elif not args.reprocess and obs_path.exists():
                     print(f"[SKIP] File exists: {obs_path.name}")
                 else:
-                    print(f"Processing date {msg_date} — {len(all_image_paths)} image(s), {len(rows)} message(s)")
+                    print(f"Processing date {msg_date} — {len(all_image_paths)} image(s), "
+                          f"{len(rows)} message(s), {len(content_parts)} text block(s) merged")
 
                     # Route images: att_0 = MACD table, att_1 = What's Changed, rest = extras
                     table_path = next((p for p in all_image_paths if "_att_0." in p), all_image_paths[0])
