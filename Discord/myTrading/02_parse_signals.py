@@ -483,6 +483,10 @@ def parse_msg(msg_row, conn):
                     sig['option_type'] = 'CALL'
                 elif re.search(r'\bleaps?\b', st):
                     sig['option_type'] = 'CALL'
+                elif re.search(r'\bskip\b', st):
+                    # SKIP = "skip strike" call option (long call, deep ITM/OTM strike).
+                    # Strategy text may omit the word "call" (e.g. "Bought SKIP").
+                    sig['option_type'] = 'CALL'
 
 
             # Fallback: infer from raw direction keywords in cleaned text
