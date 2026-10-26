@@ -1,12 +1,90 @@
-"""02_parse_signals.py - Extract trading signals from discord_message -> discord_trade_signal"""
+"""02_parse_signals.py - Extract trading signals from discord_message -> discord_trade_signal
+
+USAGE
+-----
+
+  # Incremental (default): scan only from latest signal_date forward per channel
+  python 02_parse_signals.py
+  python 02_parse_signals.py --channel-id 3
+
+  # Backfill: scan all messages from a specific date
+  python 02_parse_signals.py --date 2026-10-09
+  python 02_parse_signals.py --date 2026-10-09 --channel-id 3
+
+
+TWO MODES
+---------
+
+  1. INCREMENTAL (no --date):
+     - Per channel, find latest signal_date already in discord_trade_signal
+     - Fetch messages where message.created_at >= latest_signal_date
+     - Skip messages already in discord_trade_signal (NOT EXISTS dedup)
+     - No signals for a channel yet? Use a 60-day cutoff
+
+  2. BACKFILL (--date specified):
+     - Fetch all messages from the specified date
+     - Skip messages already in discord_trade_signal (NOT EXISTS dedup)
+     - Re-running for the same date picks up previously-skipped messages
+       (no double-insert, uses ON CONFLICT upsert)
+"""
 import os, sys
 import re
 import uuid
 import json
+import argparse
+from datetime import date, datetime, timedelta
 import psycopg2
 import requests
 import argparse
 from datetime import datetime, date
+
+# === INLINED from parse_signals.py (avoids import failures in cron context) ===
+import re as _re
+from typing import Optional
+
+def _price_pat(keywords):
+    return _re.compile(
+        r'(?:' + '|'.join(keywords) + r')[:\s]*\$?\s*'
+        r'(\$[0-9,]+\.[0-9]+|\$[0-9,]+|[0-9,]+\.[0-9]+|[0-9,]+|\.[0-9]+)'
+        r'(?:\s*each)?',
+        _re.IGNORECASE
+    )
+
+_ENTRY_RE   = _price_pat(['entry', 'buy', 'purchase', 'entry price', 'at', 'entered?', 'got'])
+_TARGET_RE  = _price_pat(['target', 'take profit', 'tp', 'profit', 'taking', 'exit'])
+_STOP_RE    = _price_pat(['stop', 'stoploss', 'stop loss', 'sl', 'stopped', 'if it drops'])
+_PREMIUM_RE = _price_pat(['premium', 'premium received', 'premium:', 'received', 'payment', 'got'])
+_STRIKE_RE  = _price_pat(['strike', 'strike price', 'strike:'])
+
+def extract_price(text: str, pattern) -> Optional[float]:
+    match = pattern.search(text)
+    if match:
+        try:
+            val = match.group(1).replace(',', '').replace('$', '').strip()
+            if not val:
+                decimal_match = _re.search(r'\$?\s*(\.[0-9]+)', text[match.start():match.end()+4])
+                if decimal_match:
+                    val = '0' + decimal_match.group(1)
+                else:
+                    return None
+            if val.startswith('.'):
+                val = '0' + val
+            return float(val)
+        except (ValueError, AttributeError):
+            return None
+    return None
+
+def extract_strike(text: str) -> Optional[float]:
+    return extract_price(text, _STRIKE_RE)
+
+def extract_premium(text: str) -> Optional[float]:
+    return extract_price(text, _PREMIUM_RE)
+# === END INLINED ===
+
+# Import remaining helpers from parse_signals
+from parse_signals import (
+    extract_direction, extract_strategy, calc_pct
+)
 
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
@@ -14,7 +92,7 @@ DB_CONFIG = {
     "host": "127.0.0.1",
     "port": 5432,
     "user": "postgres",
-    "password": os.environ.get("DB_PASSWORD", ""),
+    "password": os.environ.get("DB_PW", ""),
     "dbname": "fintech",
 }
 
@@ -48,7 +126,7 @@ STRIKE_RE = re.compile(
     re.IGNORECASE
 )
 EXPIRY_RE = re.compile(
-    r'(?:exp(?:iry|iration)?|expires?|by)\s*[:.\s]*(?:(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})|(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*\.?\s+(\d{1,2}),?\s+(\d{4}))',
+    r'(?:exp(?:iry|iration)?|expires?|by)\s*[:.\s]*(?:(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})|(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*\.?\s+(\d{1,2})(?:,?\s+(\d{4}))?)',
     re.IGNORECASE
 )
 STRATEGY_LINE_RE = re.compile(
@@ -252,12 +330,12 @@ def parse_expiry(text, signal_date):
             if year < 100:
                 year += 2000
             return date(year, month, day)
-        # Month-name format: group(2)=MONTH, group(3)=day, group(4)=year
+        # Month-name format: group(2)=MONTH, group(3)=day, group(4)=year (optional)
         elif m.group(2):
             from calendar import month_abbr
             month_str = m.group(2).upper()
             day = int(m.group(3))
-            year = int(m.group(4))
+            year = int(m.group(4)) if m.group(4) else signal_date.year
             for i, abbr in enumerate(month_abbr):
                 if abbr.upper() == month_str:
                     return date(year, i, day)
@@ -326,10 +404,12 @@ def parse_msg(msg_row, conn):
         return []
     account_id = row[0]
 
-    entry_price  = extract_price(cleaned, _ENTRY_RE)
-    target_price = extract_price(cleaned, _TARGET_RE)
-    stop_price   = extract_price(cleaned, _STOP_RE)
-    asset_class  = detect_asset_class(cleaned)
+    entry_price   = extract_price(cleaned, _ENTRY_RE)
+    target_price  = extract_price(cleaned, _TARGET_RE)
+    stop_price    = extract_price(cleaned, _STOP_RE)
+    strike_price  = extract_strike(cleaned)
+    premium_price = extract_premium(cleaned)
+    asset_class   = detect_asset_class(cleaned)
 
     direction = extract_direction(cleaned)
     strategy  = extract_strategy(cleaned)
@@ -374,12 +454,17 @@ def parse_msg(msg_row, conn):
             'target_pct':      target_pct,
             'stop_pct':        stop_pct,
             'risk_reward_ratio': rr,
+            'strike_price':    strike_price,
+            'premium_price':   premium_price,
+            'option_type':     None,
         }
 
         # Options fields
         if asset_class == 'OPTION':
             sig['stock_ticker'] = ticker.upper()
             sig['expiration_date'] = parse_expiry(cleaned, signal_date)
+            sig['strike_price'] = strike_price
+            sig['premium_price'] = premium_price
 
             # Parse strategy line (e.g. "Strategy: Covered Call")
             strat_m = STRATEGY_LINE_RE.search(content)
@@ -388,14 +473,17 @@ def parse_msg(msg_row, conn):
 
             # Infer option_type from strategy_type first (must check before raw text,
             # because clean_text collapsed the newlines making ^strategy fail)
+            # Note: trailing \b removed from put/call patterns so they match both
+            # "cash secured put" AND "cash secured puts" / "covered call" AND "covered calls"
             if sig.get('strategy_type'):
                 st = sig['strategy_type'].lower()
-                if re.search(r'\bcsp\b|\bcash.?secured.?put\b|\bsold.?put\b|\bshort.?put\b', st):
+                if re.search(r'\bcsp\b|\bcash.?secured.?put|\bsold.?put|\bshort.?put|wheel.*put', st):
                     sig['option_type'] = 'PUT'
-                elif re.search(r'\bcc\b|\bcovered.?call\b|\bshort.?call\b', st):
+                elif re.search(r'\bcc\b|\bcovered.?call|\bshort.?call|wheel.*call', st):
                     sig['option_type'] = 'CALL'
                 elif re.search(r'\bleaps?\b', st):
                     sig['option_type'] = 'CALL'
+
 
             # Fallback: infer from raw direction keywords in cleaned text
             if not sig.get('option_type'):
@@ -433,10 +521,10 @@ def parse_msg(msg_row, conn):
                 sig['entry_premium_approx'] = is_approx(cleaned, premium)
                 t_pct = target_pct or 50
                 s_pct = stop_pct or 25
-                if sig['option_type'] == 'CALL':
+                if sig.get('option_type') == 'CALL':
                     sig['target_premium'] = round(premium * (1 + t_pct/100), 4) if premium else None
                     sig['stop_premium']   = round(premium * (1 - s_pct/100), 4) if premium else None
-                elif sig['option_type'] == 'PUT':
+                elif sig.get('option_type') == 'PUT':
                     sig['target_premium'] = round(premium * (1 + t_pct/100), 4) if premium else None
                     sig['stop_premium']   = round(premium * (1 - s_pct/100), 4) if premium else None
                 sig['target_pct_opt'] = t_pct
@@ -505,54 +593,148 @@ def insert_signal(conn, sig):
         return False
 
 
-def fetch_messages(conn, channel_id=None, limit=500):
-    """Fetch messages that haven't been parsed yet."""
+def get_latest_signal_date(conn, channel_id):
+    """Return the latest signal_date for a channel, or None if no signals yet."""
     cur = conn.cursor()
-    if channel_id:
-        cur.execute("""
-            SELECT m.id, m.channel_id, c.account_id, m.message_timestamp,
-                   m.author_username, m.author_posted_at, m.content
-            FROM discord_message m
-            JOIN discord_channel c ON c.id = m.channel_id
-            WHERE m.channel_id = %s
-              AND NOT EXISTS (
-                  SELECT 1 FROM discord_trade_signal s
-                  WHERE s.message_id = m.id
-              )
-              AND m.content IS NOT NULL AND m.content != ''
-            ORDER BY m.message_timestamp DESC
-            LIMIT %s
-        """, (channel_id, limit))
+    cur.execute("""
+        SELECT MAX(s.signal_date)
+        FROM discord_trade_signal s
+        WHERE s.channel_id = %s
+    """, (channel_id,))
+    row = cur.fetchone()
+    cur.close()
+    return row[0] if row and row[0] else None
+
+
+def fetch_messages(conn, channel_id=None, limit=500, as_of_date=None):
+    """
+    Fetch messages that haven't been parsed yet.
+
+    Mode 1 — --date (as_of_date provided):
+        Fetch all messages from that date, filtered by NOT EXISTS dedup.
+    Mode 2 — incremental (default):
+        For each channel, find latest signal_date in discord_trade_signal.
+        Fetch messages where message.created_at >= latest_signal_date AND NOT EXISTS.
+    """
+    cur = conn.cursor()
+
+    if as_of_date:
+        # Backfill mode: scan all messages from a specific date
+        if channel_id:
+            cur.execute("""
+                SELECT m.id, m.channel_id, c.account_id, m.message_timestamp,
+                       m.author_username, m.author_posted_at, m.content
+                FROM discord_message m
+                JOIN discord_channel c ON c.id = m.channel_id
+                WHERE m.channel_id = %s
+                  AND DATE(m.created_at AT TIME ZONE 'America/New_York') = %s
+                  AND NOT EXISTS (
+                      SELECT 1 FROM discord_trade_signal s
+                      WHERE s.message_id = m.id
+                  )
+                  AND m.content IS NOT NULL AND m.content != ''
+                ORDER BY m.message_timestamp ASC
+                LIMIT %s
+            """, (channel_id, as_of_date, limit))
+        else:
+            cur.execute("""
+                SELECT m.id, m.channel_id, c.account_id, m.message_timestamp,
+                       m.author_username, m.author_posted_at, m.content
+                FROM discord_message m
+                JOIN discord_channel c ON c.id = m.channel_id
+                WHERE DATE(m.created_at AT TIME ZONE 'America/New_York') = %s
+                  AND NOT EXISTS (
+                      SELECT 1 FROM discord_trade_signal s
+                      WHERE s.message_id = m.id
+                  )
+                  AND m.content IS NOT NULL AND m.content != ''
+                ORDER BY m.message_timestamp ASC
+                LIMIT %s
+            """, (as_of_date, limit))
     else:
-        cur.execute("""
-            SELECT m.id, m.channel_id, c.account_id, m.message_timestamp,
-                   m.author_username, m.author_posted_at, m.content
-            FROM discord_message m
-            JOIN discord_channel c ON c.id = m.channel_id
-            WHERE NOT EXISTS (
-                SELECT 1 FROM discord_trade_signal s
-                WHERE s.message_id = m.id
-            )
-              AND m.content IS NOT NULL AND m.content != ''
-            ORDER BY m.message_timestamp DESC
-            LIMIT %s
-        """, (limit,))
+        # Incremental mode: per-channel, only scan from latest signal_date forward
+        if channel_id:
+            latest = get_latest_signal_date(conn, channel_id)
+            if latest is None:
+                # No signals yet for this channel — use a 60-day cutoff
+                latest = (datetime.now() - timedelta(days=60)).date()
+            cur.execute("""
+                SELECT m.id, m.channel_id, c.account_id, m.message_timestamp,
+                       m.author_username, m.author_posted_at, m.content
+                FROM discord_message m
+                JOIN discord_channel c ON c.id = m.channel_id
+                WHERE m.channel_id = %s
+                  AND DATE(m.created_at AT TIME ZONE 'America/New_York') >= %s
+                  AND NOT EXISTS (
+                      SELECT 1 FROM discord_trade_signal s
+                      WHERE s.message_id = m.id
+                  )
+                  AND m.content IS NOT NULL AND m.content != ''
+                ORDER BY m.message_timestamp ASC
+                LIMIT %s
+            """, (channel_id, latest, limit))
+        else:
+            # All channels: get latest signal_date per channel via CTE
+            cur.execute("""
+                WITH latest_per_channel AS (
+                    SELECT channel_id, COALESCE(MAX(signal_date), CURRENT_DATE - INTERVAL '60 days')::date AS cutoff
+                    FROM discord_trade_signal
+                    GROUP BY channel_id
+                )
+                SELECT m.id, m.channel_id, c.account_id, m.message_timestamp,
+                       m.author_username, m.author_posted_at, m.content
+                FROM discord_message m
+                JOIN discord_channel c ON c.id = m.channel_id
+                JOIN latest_per_channel lpc ON lpc.channel_id = m.channel_id
+                WHERE DATE(m.created_at AT TIME ZONE 'America/New_York') >= lpc.cutoff
+                  AND NOT EXISTS (
+                      SELECT 1 FROM discord_trade_signal s
+                      WHERE s.message_id = m.id
+                  )
+                  AND m.content IS NOT NULL AND m.content != ''
+                ORDER BY m.message_timestamp ASC
+                LIMIT %s
+            """, (limit,))
+
     rows = cur.fetchall()
     cur.close()
     return rows
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Parse trading signals from Discord messages")
+    parser = argparse.ArgumentParser(
+        description="Parse trading signals from Discord messages.",
+        epilog="""
+Examples:
+  python 02_parse_signals.py                        # incremental scan
+  python 02_parse_signals.py --channel-id 3         # one channel, incremental
+  python 02_parse_signals.py --date 2026-10-09      # backfill a specific date
+  python 02_parse_signals.py --date 2026-10-09 --dry-run  # test without inserting
+        """
+    )
     parser.add_argument("--channel-id", type=int, help="Filter by discord_channel.id (PK)")
+    parser.add_argument("--date", type=str, metavar="YYYY-MM-DD",
+                        help="Backfill mode: parse all messages from this date (overrides incremental scan)")
     parser.add_argument("--limit", type=int, default=500)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
+    # Validate --date format
+    as_of_date = None
+    if args.date:
+        try:
+            as_of_date = datetime.strptime(args.date, "%Y-%m-%d").date()
+        except ValueError:
+            print(f"[ERROR] Invalid date format: {args.date!r}. Use YYYY-MM-DD.")
+            sys.exit(1)
+        print(f"[MODE] Backfill: scanning messages from {args.date}")
+    else:
+        print(f"[MODE] Incremental: scanning from latest signal_date per channel")
+
     conn = get_conn()
 
     print(f"[READ] Fetching unparsed messages...")
-    rows = fetch_messages(conn, channel_id=args.channel_id, limit=args.limit)
+    rows = fetch_messages(conn, channel_id=args.channel_id, limit=args.limit, as_of_date=as_of_date)
     print(f"       Found {len(rows)} messages to parse")
 
     if not rows:
@@ -562,9 +744,20 @@ def main():
 
     print(f"[PARSE] Extracting signals...")
     all_signals = []
+    parse_errors = 0
     for row in rows:
-        sigs = parse_msg(row, conn)
-        all_signals.extend(sigs)
+        try:
+            sigs = parse_msg(row, conn)
+            all_signals.extend(sigs)
+        except Exception as e:
+            # Never let one malformed message abort the whole batch
+            parse_errors += 1
+            msg_id = row[0] if row else '?'
+            print(f"  [WARN] Failed to parse message id={msg_id}: {type(e).__name__}: {e}")
+            continue
+
+    if parse_errors:
+        print(f"       {parse_errors} message(s) failed to parse (skipped)")
 
     print(f"       Found {len(all_signals)} signal(s)")
 
