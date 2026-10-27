@@ -662,16 +662,27 @@ Set-Service -Name RPCPerformanceService -StartupType Disabled; Stop-Service -Nam
 - Constraint updated to UNIQUE(scan_id, ticker) instead of UNIQUE(screener_name, ticker)
 - **Sanity-check rows per scan**, not just scan status. A scan can be `completed` with only 2 rows (2026-10-22 scan_id 363) vs normal ~20. Query: `select scan_id, count(*) from finviz_screener_scan_result group by scan_id order by scan_id desc limit 5`. Duplicate scans get marked `skipped` by the same "already loaded today" guard that hides bad extractions.
 
-### `change_pct` Corruption (verified 2026-10-23)
-- Stored `finviz_screener_scan_result.change_pct` values can be wildly wrong vs reality (2026-10-23 scan_id 365: STLA -62.9% vs actual -7.3%, RITM +277% vs actual +6.8%, SLM/FLG/INFY/TKC also wrong).
-- Cause: computed against a stale/wrong reference price, not the prior session close. This field feeds the Telegram ">5% mover" summary, so it produces false alerts.
+### `change_pct` Corruption — FIXED 2026-10-26 (commit `6c6844e`)
+- Stored `finviz_screener_scan_result.change_pct` values were wildly wrong vs reality (2026-10-23 scan_id 365: STLA -62.9% vs actual -7.3%, RITM +277% vs actual +6.8%, SLM/FLG/INFY/TKC also wrong).
+- **Root cause:** Finviz's embedded-JSON `change` field is ALREADY a percentage (prevClose 15.75 → price 23.20 ⇒ change = 47.33). `scrape_finviz.py` treated it as an absolute price delta via `change/(price-change)*100` → garbage like −196%/−237%. **All historical GapperMid `change_pct` values before 2026-10-26 are suspect.**
+- **Fix:** derive `change_pct` from prevClose/price, fall back to the raw `change` field; also stopped dropping `PE` (was always ''). Corrected data loaded as a NEW scan_id 369 (20 rows) — old scans preserved.
+- This field feeds the Telegram ">5% mover" summary, so the fix removes false alerts.
 - **Always sanity-check GapperMid movers against live quotes (Yahoo chart API) before reporting them.**
 - Script: `hb_quotes.py` fetches watchlist quotes; extend its WATCH list to include flagged tickers for spot checks.
+
+### Discord Pipeline Health Check (verified 2026-10-26)
+- **Do NOT assume the Discord fetch is broken when it returns 0.** Check `discord_channel.last_fetched_at` first — if it is recent, the pipeline is healthy and there genuinely were no new posts.
+- Verified 2026-10-26: `last_fetched_at` = 2026-10-26 08:30 ET (coach-trades), 08:00 ET (coach-weekly); `discord_message` max created_at 2026-10-25 22:27 ET; `discord_trade_signal` max signal_date 2026-10-23 (111 rows).
+- The 2026-10-25 "stale fetch / expired token" diagnosis was WRONG — it was a cursor/market-hours artifact.
+- Column names: `discord_channel` name column is **`channel_name`** (PK `id`); `discord_message` FK is **`channel_id`** → joins `discord_channel.id` (not `channel_db_id`).
+- **Signal parser now extracts strike + premium** (2026-10-26, commit `f82b664`). `Discord/myTrading/parse_signals.py` has a unified `_price_pat()` helper for entry/target/stop/**premium**/**strike**, and the price regex handles `$68.00`, `$68`, `68.00`, `68`, and **`$.55` / `.55`** (dollar-sign then bare decimal — the coach's premium format, previously unparseable). Result: `discord_trade_signal` 115 rows, 114 with `strike_price`, 107 with `premium_price`, max signal_date 2026-10-26.
+- **Signal-coverage rule:** after a fetch, compare message count vs signal count (`SELECT ... COUNT(s.message_id)`). As of 2026-10-26, 115/132 channel messages produce a signal row; the ~17 without are legitimately non-signals (market commentary, watchlist posts, chat). A message with no signal row is usually a parsing miss, not a market-commentary message.
+- **No natural dedup key on `discord_trade_signal`** — only `id` (PK) and `signal_id` (UUID unique). Repeated coach posts of the same trade create near-duplicate rows (e.g. BE 275 PUT existed as both msg 6495 and 6517). Dedupe manually by (stock_ticker, strike_price, expiration_date, premium_price).
 
 ### DB Column Name Gotchas (verified 2026-10-22)
 - `stock_technical` date column is **`date`** (not `trade_date`); other cols: ticker, open, high, low, close, volume, rsi, macd, macd_signal, sma_20/50/200, bb_*, atr, signals, recommendation, stop_loss, tp1/2/3
 - `discord_trade_signal` uses **`stock_ticker`** (not ticker) and `asset_class`, `strategy_type`, `option_type`, `strike_price`, `entry_premium`, `expiration_date`, `author_username`, `signal_date`
-- `discord_trade_signal` has 107 rows as of 2026-10-22 (max signal_date 2026-10-22)
+- `discord_trade_signal` has 115 rows as of 2026-10-26 (max signal_date 2026-10-26)
 - **fintech DB is reachable at `127.0.0.1:5432` from the workspace shell.** Heartbeat logs claiming "DB 10.0.0.10 unreachable (timeout)" refer to a different/legacy host — do not assume the local DB is down.
 
 ---
@@ -899,7 +910,7 @@ To run the same analysis next week:
 - Each vault: own .git, own remote, own GitHub repo
 
 ## OpenClaw Version
-- Current: **2026.9.9** (2026.9.8 → 2026.9.9 via npm update, 2026-10-10) — npm latest as of 2026-10-23 is **2026.10.6** (installed still trails)
+- Current: **2026.9.9** (2026.9.8 → 2026.9.9 via npm update, 2026-10-10) — npm latest as of 2026-10-24 is **2026.10.7** (installed still trails)
 - Gateway WS URL: `ws://localhost:18789` — use `localhost` NOT `127.0.0.1` (gateway listens on IPv6 only)
 - Config: `C:\Users\shaowei_l\.openclaw\openclaw.json`
 - Workspace: `C:\Users\shaowei_l\.openclaw\workspace`
