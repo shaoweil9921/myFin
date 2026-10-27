@@ -6,7 +6,7 @@ import winreg
 
 
 def get_db_pw():
-    """Read DB_PW from Windows registry (HKCU\Environment)."""
+    r"""Read DB_PW from Windows registry (HKCU\Environment)."""
     try:
         key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Environment")
         db_pw, _ = winreg.QueryValueEx(key, "DB_PW")
