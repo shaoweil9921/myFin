@@ -48,38 +48,39 @@ DB_CONFIG = {
 # Ticker: 2-5 uppercase letters, standalone
 TICKER_RE = re.compile(r'\b([A-Z]{2,5})\b')
 
-# Entry price patterns
-ENTRY_PRICE_RE = re.compile(
-    r'(?:entry|buy|purchase|entry price|at|entered?|got)[:\s]*\$?([0-9,]+\.?[0-9]*)',
-    re.IGNORECASE
-)
-
-# Price patterns - must handle $ prefix
+# Price number: handles $68, $68.00, $.68, $68., 68.00, 68
 _PRICE_NUM = r'\$?\s*[0-9,]+\.?[0-9]*'
-_ENTRY_RE = re.compile(
-    r'(?:entry|buy|purchase|entry price|entered?|got)[:\s]*(\$?[0-9,]+\.?[0-9]*)',
-    re.IGNORECASE
-)
-_TARGET_RE = re.compile(
-    r'(?:target|take profit|tp|profit)[:\s]*(?:at\s*)?(\$?[0-9,]+\.?[0-9]*)',
-    re.IGNORECASE
-)
-_STOP_RE = re.compile(
-    r'(?:stop|stoploss|stop loss|sl|stopped)[:\s]*(?:at\s*)?(\$?[0-9,]+\.?[0-9]*)',
-    re.IGNORECASE
+
+# Price number: handles $68, $68.00, $.68, $68., 68.00, 68
+# Pattern alternatives:
+#   1. $ digit(s) . digit(s)   -> $68.00
+#   2. $ digit(s)              -> $68
+#   3. digit(s) . digit(s)    -> 68.00
+#   4. digit(s) alone          -> 68
+#   5. . digit(s)              -> .68  (becomes 0.68)
+_PRICE_NUM_RE = re.compile(
+    r'\$?\s*(\$[0-9,]+\.[0-9]+|\$[0-9,]+|[0-9,]+\.[0-9]+|[0-9,]+|\.[0-9]+)'
 )
 
-# Target price patterns
-TARGET_RE = re.compile(
-    r'(?:target|take profit|tp|profit|taking|exit)[:\s]*\$?([0-9,]+\.?[0-9]*)',
-    re.IGNORECASE
-)
+# Generic price extractor: keyword + optional delimiter + optional $
+def _price_pat(keywords):
+    return re.compile(
+        r'(?:' + '|'.join(keywords) + r')[:\s]*\$?\s*'
+        r'(\$[0-9,]+\.[0-9]+|\$[0-9,]+|[0-9,]+\.[0-9]+|[0-9,]+|\.[0-9]+)'
+        r'(?:\s*each)?',
+        re.IGNORECASE
+    )
 
-# Stop loss patterns
-STOP_RE = re.compile(
-    r'(?:stop|stoploss|stop loss|sl|stopped|if it drops)[:\s]*\$?([0-9,]+\.?[0-9]*)',
-    re.IGNORECASE
-)
+_ENTRY_RE   = _price_pat(['entry', 'buy', 'purchase', 'entry price', 'at', 'entered?', 'got'])
+_TARGET_RE  = _price_pat(['target', 'take profit', 'tp', 'profit', 'taking', 'exit'])
+_STOP_RE    = _price_pat(['stop', 'stoploss', 'stop loss', 'sl', 'stopped', 'if it drops'])
+_PREMIUM_RE = _price_pat(['premium', 'premium received', 'premium:', 'received', 'payment', 'got'])
+_STRIKE_RE  = _price_pat(['strike', 'strike price', 'strike:'])
+
+# Legacy aliases
+ENTRY_PRICE_RE = _ENTRY_RE
+TARGET_RE = _TARGET_RE
+STOP_RE = _STOP_RE
 
 # Strategy type patterns
 STRATEGY_RE = re.compile(
@@ -162,15 +163,42 @@ def extract_tickers(text: str):
 
 
 def extract_price(text: str, pattern: re.Pattern) -> Optional[float]:
-    """Extract first price match from text."""
+    """Extract first price match from text.
+
+    Handles:
+      $45.67  $45  $45.  $45,000  (standard)
+      $.68    $.50  $.25        (dollar-then-decimal, no leading digit)
+    """
     match = pattern.search(text)
     if match:
         try:
             val = match.group(1).replace(',', '').replace('$', '').strip()
+            if not val:
+                # Group captured nothing — check if we hit $.XX (dollar then decimal)
+                # The $ was consumed by \$? but no digits followed before .
+                # Fall back to matching just the decimal portion directly.
+                decimal_match = re.search(r'\$?\s*(\.\d+)', text[match.start():match.end()+4])
+                if decimal_match:
+                    val = '0' + decimal_match.group(1)
+                else:
+                    return None
+            # Handle '$.XX' format — leading dot with no preceding digit
+            if val.startswith('.'):
+                val = '0' + val
             return float(val)
         except ValueError:
             return None
     return None
+
+
+def extract_strike(text: str) -> Optional[float]:
+    """Extract strike price from options signal text."""
+    return extract_price(text, _STRIKE_RE)
+
+
+def extract_premium(text: str) -> Optional[float]:
+    """Extract premium received from signal text. Handles '$.68', '$0.53', etc."""
+    return extract_price(text, _PREMIUM_RE)
 
 
 def is_approx_price(text: str, price: float) -> bool:
@@ -281,6 +309,9 @@ def parse_signal_message(msg: dict) -> list:
     else:
         rr = None
 
+    strike_price = extract_strike(cleaned)
+    premium_price = extract_premium(cleaned)
+
     for ticker in tickers[:3]:  # max 3 tickers per message
         sig = {
             'signal_id': str(uuid.uuid4()),
@@ -295,6 +326,8 @@ def parse_signal_message(msg: dict) -> list:
             'target_pct': target_pct,
             'stop_pct': stop_pct,
             'risk_reward_ratio': rr,
+            'strike_price': strike_price,
+            'premium_price': premium_price,
             'source_message_id': msg.get('message_id') or msg.get('id'),
             'source_channel_id': msg.get('channel_id'),
             'source_channel_name': msg.get('channel_name'),
