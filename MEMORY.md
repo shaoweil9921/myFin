@@ -10,7 +10,41 @@ All application data lives in `fintech` PostgreSQL at `127.0.0.1:5432`. SQLite i
 
 ---
 
-## CRON JOBS — CRITICAL REMINDER (updated 2026-10-15)
+## CRON JOBS — CRITICAL REMINDER (updated 2026-10-27)
+
+### Disabling system-owned monitor jobs (RESOLVED 2026-10-27)
+
+The weekly **"Skill collection review (main)"** job (id `47710e37-0c9b-4349-92e3-71107174cd20`, declarationKey `skill-collection-review:main`) is a **system-owned monitor job**. These CANNOT be edited or removed via CLI or API — all of these fail with `system-owned monitor jobs cannot be edited by cron clients`:
+- `automations(action="update", ...)` 
+- `openclaw cron disable <id>`
+- `openclaw cron rm <id>`
+- `openclaw gateway call cron.update` (needs `jobId` + `patch` schema, but still rejected for system-owned jobs)
+
+**Correct way to disable it:** set config `skills.workshop.autonomous.mode` = `off`
+```
+skills: { workshop: { autonomous: { mode: "off" } } }
+```
+The Gateway converges the system-owned job to `enabled: false` on config reload (no restart needed). Modes: `auto` (enabled), `propose`, `off` (both keep it disabled).
+
+**Verification:** `automations(action="get", jobId=...)` → `"enabled": false`.
+
+**CONFIRMED DISABLED 2026-10-27 15:18 EDT.** `skill-collection-review-main` now reports `enabled: false`, `nextRunAt: null`. The hourly watchdog reads `openclaw gateway call cron.list`, and that output now returns **14 jobs instead of 15** — the job is no longer listed at all, so the repeated "🔴 Cron Job Failed: skill-collection-review-main" Telegram alerts (hourly, 2026-10-26 23:03 → 2026-10-27 15:03) have stopped at the source.
+
+**Why it failed originally (root cause, not a code bug):** two runs on Oct 24 in the same weekly review job — run 1 (11:51) timed out after 27 min burning ~4.1M tokens, run 2 (12:19) "Agent couldn't generate a response" after 14 min / ~1.25M tokens. The review prompt is enormous (it reads the full session corpus), so it exhausts the context/timeout budget. `consecutiveErrors` then stayed at 2 and the hourly watchdog re-alerted every hour with a stale error.
+
+Source: `docs/automation/cron-jobs/payloads.md` — "Skill collection review runs every 7 days. It is enabled when `skills.workshop.autonomous.mode` is `auto`; `propose` and `off` keep the system-owned job disabled."
+
+### Automations storage (CORRECTED 2026-10-27)
+
+Live automations DB is `C:\Users\shaowei_l\.openclaw\state\openclaw.sqlite` (NOT the npm path — that one was 0 bytes). Tables: `cron_jobs`, `cron_run_receipts`, `cron_job_scratch`. The `store_key` column points at a `jobs.json` path that may not exist; SQLite is the real store.
+
+`openclaw gateway call cron.list` works for listing (the watchdog uses it). `cron.update` requires `{"jobId": ..., "patch": {...}}` — NOT `{id, enabled}`.
+
+### Watchdog cron job
+
+`Cron Job Watchdog` (id `7449b395-fb91-49d0-b4a6-11b49b13330f`) — hourly, checks all cron jobs via `openclaw gateway call cron.list`, alerts to Telegram 7923250382.
+
+## CRON JOBS — REMINDER (2026-10-15)
 
 **All cron job automations are stored in `openclaw.sqlite`** at:
 `C:\Users\shaowei_l\AppData\Roaming\npm\node_modules\openclaw\openclaw.sqlite`
@@ -910,7 +944,7 @@ To run the same analysis next week:
 - Each vault: own .git, own remote, own GitHub repo
 
 ## OpenClaw Version
-- Current: **2026.9.9** (2026.9.8 → 2026.9.9 via npm update, 2026-10-10) — npm latest as of 2026-10-24 is **2026.10.7** (installed still trails)
+- Current: **2026.9.9** (2026.9.8 → 2026.9.9 via npm update, 2026-10-10) — npm latest as of 2026-10-27 is **2026.10.8** (installed still trails; upgrade pending user decision)
 - Gateway WS URL: `ws://localhost:18789` — use `localhost` NOT `127.0.0.1` (gateway listens on IPv6 only)
 - Config: `C:\Users\shaowei_l\.openclaw\openclaw.json`
 - Workspace: `C:\Users\shaowei_l\.openclaw\workspace`
