@@ -73,7 +73,41 @@ Live automations DB is `C:\Users\shaowei_l\.openclaw\state\openclaw.sqlite` (NOT
 1. Fix heartbeat session - it gives false "0 signals" reports when pipeline actually finds signals. The `sessions_spawn` subprocess output may not be captured correctly. Consider either: (a) approving exec for heartbeat session, or (b) removing pipeline work from heartbeat entirely and relying on cron only
 2. Recreate all lost cron jobs from memory of what they were
 3. Fix `generate_daily_signals.py` to use `--date` parameter (was partially done but not fully tested)
-4. Investigate why openclaw.sqlite gets wiped on gateway restart — is there a migration or init that resets it?
+4. Investigate why openclaw.sqlite gets wiped on gateway restart - is there a migration or init that resets it?
+
+### Daily signals file gaps (audited 2026-10-27)
+
+Cross-checked `discord_trade_signal.signal_date` against `C:\Data\Obsidian_root\Obsidian_trading\Ashley_trading\*Daily-Signals.md`.
+**Genuinely missing files were 2026-09-29 (4 signals) and 2026-10-02 (1 signal)** - both regenerated with `python Discord\myTrading\generate_daily_signals.py --date YYYY-MM-DD`. Verified written.
+
+**2026-10-16 and 2026-10-21 have no file because there were no signals**: Oct 16 = 0 `discord_message` rows that day; Oct 21 = 1 message, 0 signals. Correct behaviour, not a bug.
+
+### Letter position tracker - "12 of 18 show Entry: n/a" (RESOLVED 2026-10-27)
+
+Heartbeat reported this as a quote-fetch failure. **It is not.** Two separate things:
+1. The `Entry:�` was a **console encoding artifact** - the script printed an em-dash and the Windows console is cp1252. Fixed by printing `n/a` instead of `—`.
+2. The 12 positions genuinely have `entry_price IS NULL` because **those letters were extracted AFTER their options had already expired**: letter 2 (letter_date 2026-08-09, exp 2026-08-14) was extracted 2026-08-29; letter 3 (letter_date 2026-10-04, exp 2026-10-09) was extracted 2026-10-25. The ITMC runbook step 7 ("Handle already-expired letters") deliberately marks these `expired` with `exit_price=0`, `exit_date=expiration`, `pnl_pct` NULL. See `docs/itmc_extraction_runbook.md`.
+
+**Do not "fix" this by backfilling entry_price** - there was no fill to record.
+
+**yfinance option quoting DOES work** (`yf_opt` returned 147.025 for AAPL 200C, and correctly returns None for expired options and bogus strikes). A symbol built with a wrong expiry format returns bid=0/ask=0 and an empty history - that is the real failure mode to look for.
+
+**Also fixed:** `alpaca_opt` was returning `(avg_entry_price + current_price) / 2` - the average of your cost basis and the current price, which is not a market price. Now returns `current_price` only. And the tracker now imports `DB_CONFIG` from `Discord/myTrading/_db_pw.py` instead of hardcoding the password.
+
+### DeepSeek provider retirement - PERMANENT FIX (2026-10-27)
+
+The recurring "deepseek retired" gateway error came from `models.providers.deepseek` still being configured while the `deepseek` plugin was disabled. **Fix: removed the `deepseek` provider block from `models.providers` in `C:\Users\shaowei_l\.openclaw\openclaw.json`** (backup at `openclaw.json.bak-2026-10-27`). `plugins.entries.deepseek.enabled` stays `false`. Verified via `openclaw gateway call models.list` - only the three MiniMax models remain. Default model is `minimax-portal/MiniMax-M2.7`; there were never any fallbacks referencing DeepSeek.
+
+### Session archive command (confirmed)
+
+```
+openclaw sessions archive "<session-key>" [--dry-run] [--json]
+```
+Keys look like `agent:main:cron:<job-id>` / `agent:main:main`. Archiving keeps the session searchable but out of the active list. Verified by archiving the stale `agent:main:cron:47710e37-...` session for the disabled skill-review job.
+
+### Python 3.14 docstring escape sequences (fixed 2026-10-27)
+
+`"\E"` in a docstring is a SyntaxError on Python 3.14. Use `r"""..."""` for docstrings containing Windows paths like `HKCU:\Environment`. Fixed in `_run_discord_fetch.py` and `Discord/myTrading/_db_pw.py`. Also `backup_critical_files.py` was prose saved with a `.py` extension (never a valid module) - renamed to `backup_critical_files.md`.
 
 ## Schaeffer's Investment Research Subscriptions
 
