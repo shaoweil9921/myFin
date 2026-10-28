@@ -1,4 +1,4 @@
-"""
+r"""
 Wrapper that chains: 03_fetch_messages.py -> 02_parse_signals.py
 Loads DB_PW from Windows registry (HKCU:\Environment\DB_PW) before spawning subprocesses.
 """
