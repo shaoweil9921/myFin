@@ -40,9 +40,20 @@ Live automations DB is `C:\Users\shaowei_l\.openclaw\state\openclaw.sqlite` (NOT
 
 `openclaw gateway call cron.list` works for listing (the watchdog uses it). `cron.update` requires `{"jobId": ..., "patch": {...}}` — NOT `{id, enabled}`.
 
-### Watchdog cron job
+### Watchdog cron job (HARDENED v2, 2026-10-27)
 
-`Cron Job Watchdog` (id `7449b395-fb91-49d0-b4a6-11b49b13330f`) — hourly, checks all cron jobs via `openclaw gateway call cron.list`, alerts to Telegram 7923250382.
+`Cron Job Watchdog` (id `7449b395-fb91-49d0-b4a6-11b49b13330f`) — hourly (`0 * * * *`, stagger 300s), isolated session, `delivery.mode: none`.
+
+**v1 problem:** it re-read `cron.list` every hour and alerted on any job with `lastRunStatus == "error"` + `consecutiveErrors > 0`, with no dedup and no disabled-job filter. A job that failed once and was then disabled kept alerting on stale state forever (the `skill-collection-review-main` case: 16 hourly alerts).
+
+**v2 logic:**
+- Reads `openclaw cron list --all --json` (fallback `openclaw gateway call cron.list`)
+- Dedup state in `memory/watchdog-state.json` — a job alerts only if its `lastRunAtMs` is GREATER than the previously recorded value; an unchanged `lastRunAtMs` = stale repeat = skip
+- Skips disabled jobs, `lastRunStatus` ok/null, and jobs with no state
+- Sends its OWN single Telegram message via the `message` tool (telegram → 7923250382); `delivery.mode` was flipped to `none` to avoid double-sending with the old `announce` delivery
+- Rewrites the state file each run, preserving still-failing entries and pruning healthy/disabled ones
+
+**Validated:** forced run 2026-10-27 21:41 ET → summary "Watchdog: nothing new", `delivered: false`, state file correctly reduced to `{"alerts": {}}` after purging the disabled job.
 
 ## CRON JOBS — REMINDER (2026-10-15)
 
