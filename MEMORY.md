@@ -748,6 +748,8 @@ Set-Service -Name RPCPerformanceService -StartupType Disabled; Stop-Service -Nam
 - This field feeds the Telegram ">5% mover" summary, so the fix removes false alerts.
 - **Always sanity-check GapperMid movers against live quotes (Yahoo chart API) before reporting them.**
 - Script: `hb_quotes.py` fetches watchlist quotes; extend its WATCH list to include flagged tickers for spot checks.
+- **Forced full load (added 2026-10-28, commit `7b228ec`):** `force_load_finviz_data.py` at workspace root loads `finviz_extracted_data.json` into a NEW scan_id, bypassing the same-day "already extracted" dedup that caused partial scans (e.g. scan 372 ok, 373 skipped, 374 forced full 20 rows). Use when a cron scan yields too few rows; do not wire it into the cron path.
+- `scan` table columns are **`scan_id`** (not `id`), `scan_name`, `scan_time`, `status`, `scan_note`, `source`.
 
 ### Discord Pipeline Health Check (verified 2026-10-26)
 - **Do NOT assume the Discord fetch is broken when it returns 0.** Check `discord_channel.last_fetched_at` first — if it is recent, the pipeline is healthy and there genuinely were no new posts.
