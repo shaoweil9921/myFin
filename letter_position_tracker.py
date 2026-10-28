@@ -5,11 +5,13 @@ Daily EOD tracking for Schaeffer's letter positions.
 Handles: entry fill, P&L update, profit target exit, expiration.
 Table: subscription_letter_position (fintech DB)
 """
-import os, sys, psycopg2, yfinance as yf, requests
+import os, sys, pathlib, psycopg2, yfinance as yf, requests
 from datetime import date, timedelta
 
-DB = dict(host='127.0.0.1', port=5432, dbname='fintech',
-          user='postgres', password='asdfghjk1234%')
+sys.path.insert(0, str(pathlib.Path(__file__).parent / "Discord" / "myTrading"))
+from _db_pw import DB_CONFIG
+
+DB = DB_CONFIG
 
 def db():
     return psycopg2.connect(**DB)
@@ -40,8 +42,8 @@ def alpaca_opt(ticker, strike, exp, otype):
         prefix = f"{ticker.upper()}{exp.strftime('%y%m%d')}{'C' if otype=='call' else 'P'}{int(float(strike)*1000):08d}"
         for p in r.json():
             if p.get('symbol', '').startswith(prefix):
-                avg, curr = float(p.get('avg_entry_price',0) or 0), float(p.get('current_price',0) or 0)
-                return (avg + curr) / 2 if avg and curr else curr
+                curr = float(p.get('current_price', 0) or 0)
+                return curr or None
         return None
     except:
         return None
@@ -143,8 +145,8 @@ def main():
     print("\nLetter Position Summary")
     print("=" * 40)
     for p in positions:
-        ep = f"${p['entry_price']:.2f}" if p['entry_price'] else "—"
-        cp = f"${p['current_price']:.2f}" if p['current_price'] else "—"
+        ep = f"${p['entry_price']:.2f}" if p['entry_price'] else "n/a"
+        cp = f"${p['current_price']:.2f}" if p['current_price'] else "n/a"
         pnl = p['pnl_pct'] or 0
         print(f"  {p['ticker']} {p['option_type'].upper()} ${p['strike']:.0f} "
               f"| Entry:{ep} Curr:{cp} [{pnl:+.0f}%] | Tgt:{p['profit_target_pct']}% | {p['status']} | {p['expiration']}")
