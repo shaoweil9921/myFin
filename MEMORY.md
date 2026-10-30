@@ -991,7 +991,7 @@ To run the same analysis next week:
 - Each vault: own .git, own remote, own GitHub repo
 
 ## OpenClaw Version
-- Current: **2026.9.9** (2026.9.8 → 2026.9.9 via npm update, 2026-10-10) — npm latest as of 2026-10-27 is **2026.10.8** (installed still trails; upgrade pending user decision)
+- Current: **2026.9.9** (2026.9.8 → 2026.9.9 via npm update, 2026-10-10) — npm latest as of 2026-10-29 is **2026.10.9** (installed still trails; upgrade pending user decision)
 - Gateway WS URL: `ws://localhost:18789` — use `localhost` NOT `127.0.0.1` (gateway listens on IPv6 only)
 - Config: `C:\Users\shaowei_l\.openclaw\openclaw.json`
 - Workspace: `C:\Users\shaowei_l\.openclaw\workspace`
