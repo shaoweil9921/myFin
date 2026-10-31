@@ -115,7 +115,7 @@ if backup_jobs:
     before = {j["id"] for j in backup_jobs}
     after = {j["id"] for j in jobs}
     missing = before - after
-        check(not missing, "no job IDs lost",
+    check(not missing, "no job IDs lost",
           f"missing={sorted(missing)}" if missing else "all 19 IDs intact")
 
     # argv shape: command jobs must use cmd /c on Windows
