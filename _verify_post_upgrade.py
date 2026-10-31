@@ -24,14 +24,14 @@ fails, warns = [], []
 
 
 def check(cond, label, detail=""):
-    print(f"  [{'PASS' if cond else 'FAIL'}] {label}" + (f" — {detail}" if detail else ""))
+    print(f"  [{'PASS' if cond else 'FAIL'}] {label}" + (f" - {detail}" if detail else ""))
     if not cond:
         fails.append(label)
     return cond
 
 
 def warn(cond, label, detail=""):
-    print(f"  [{'OK  ' if cond else 'WARN'}] {label}" + (f" — {detail}" if detail else ""))
+    print(f"  [{'OK  ' if cond else 'WARN'}] {label}" + (f" - {detail}" if detail else ""))
     if not cond:
         warns.append(label)
 
@@ -39,14 +39,15 @@ def warn(cond, label, detail=""):
 def run(cmd):
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=90,
-                           shell=isinstance(cmd, str))
+                           shell=isinstance(cmd, str),
+                           encoding="utf-8", errors="replace")
         return (r.stdout or "") + (r.stderr or "")
     except Exception as e:
         return f"<error: {e}>"
 
 
 print("=" * 70)
-print("POST-UPGRADE VERIFICATION — 2026-10-31")
+print("POST-UPGRADE VERIFICATION - 2026-10-31")
 print("=" * 70)
 
 # ---------------------------------------------------------------- 1. version
@@ -114,7 +115,7 @@ if backup_jobs:
     before = {j["id"] for j in backup_jobs}
     after = {j["id"] for j in jobs}
     missing = before - after
-    check(not missing, "no job IDs lost",
+        check(not missing, "no job IDs lost",
           f"missing={sorted(missing)}" if missing else "all 19 IDs intact")
 
     # argv shape: command jobs must use cmd /c on Windows
