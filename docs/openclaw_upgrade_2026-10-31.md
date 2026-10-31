@@ -65,30 +65,45 @@ Config sanity at backup time: `providers = [minimax-portal]`, default model
 
 ## 3. Execution Steps
 
-### Step 1 — Upgrade the npm package
+### Step 1 — Run the coordinated upgrade + restart (PRIMARY PATH)
 
+**Preferred: `gateway` tool, action `update.run`.** This is the runtime-coordinated path: it
+performs the package upgrade, the restart, and the completion notice as one supervised operation,
+keeping the Windows Scheduled Task service managed.
+
+```
+gateway(action="update.run", note="Upgrade 2026.9.9 -> 2026.10.9")
+```
+
+This is **not** the same as `openclaw update` in a shell. Per runtime guidance, the gateway hosting
+this session must be upgraded via this tool — the runtime coordinates the restart and the
+completion notice.
+
+**Fallback — owner-driven, from chat:** the owner sends `/update` in this conversation. This
+works when `commands.restart` is enabled (the default) and is the cleanest option because the
+owner drives it directly.
+
+**Fallback — external terminal (only if the coordinated path fails):**
 ```
 npm install -g openclaw@2026.10.9 --no-fund --no-audit
 ```
+then restart via the gateway-aware path. Note: running `npm install -g openclaw` while the
+gateway is live leaves the Scheduled Task pointing at the old version until the service is
+restarted — the restart is the part that must not be skipped.
 
-Expect: OpenClaw 2026.10.9. The gateway is **still running the old 2026.9.9 code** until restart.
+### Step 2 — Confirm the gateway came back
 
-### Step 2 — Restart the gateway (gateway-aware path only)
+**Do NOT** `taskkill` by port/PID, do NOT run `openclaw gateway start` through exec or a detached
+job. Those bypass the gateway's own upgrade path and leave the service unmanaged — which is
+exactly what produced `managed-service-handoff-helper-failed` last time.
 
-**Do NOT** `taskkill` by port/PID, do NOT run `openclaw update`, `npm install -g openclaw`, or
-`openclaw gateway start` through exec or a detached job. Those bypass the gateway's own upgrade
-path and leave the Windows Scheduled Task service unmanaged — which is exactly what produced
-`managed-service-handoff-helper-failed` last time.
-
-Use instead, in order of preference:
-1. **In chat:** owner sends `/update` (works when `commands.restart` is enabled, the default).
-2. **Via the `openclaw` tool:** request a gateway update/restart through it.
-
-Both coordinate the restart and emit the completion notice. If starting manually for any reason,
-run `openclaw gateway run` in the foreground — **`openclaw gateway start` times out on this host**
-and leaves the service in an unclear state.
+If the gateway must be started manually for any reason, run `openclaw gateway run` in the
+foreground — **`openclaw gateway start` times out on this host** and leaves the service in an
+unclear state.
 
 Identify the live process by its listening port, not by process name (several `node.exe` run here).
+
+Verify it reports `2026.10.9` and the Scheduled Task is still `registered · running`.
 
 ### Step 3 — Confirm the gateway came back
 
