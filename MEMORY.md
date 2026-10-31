@@ -758,8 +758,15 @@ Set-Service -Name RPCPerformanceService -StartupType Disabled; Stop-Service -Nam
 - The 2026-10-25 "stale fetch / expired token" diagnosis was WRONG — it was a cursor/market-hours artifact.
 - Column names: `discord_channel` name column is **`channel_name`** (PK `id`); `discord_message` FK is **`channel_id`** → joins `discord_channel.id` (not `channel_db_id`).
 - **Signal parser now extracts strike + premium** (2026-10-26, commit `f82b664`). `Discord/myTrading/parse_signals.py` has a unified `_price_pat()` helper for entry/target/stop/**premium**/**strike**, and the price regex handles `$68.00`, `$68`, `68.00`, `68`, and **`$.55` / `.55`** (dollar-sign then bare decimal — the coach's premium format, previously unparseable). Result: `discord_trade_signal` 115 rows, 114 with `strike_price`, 107 with `premium_price`, max signal_date 2026-10-26.
+- **A missing `YYYY-MM-DD-Daily-Signals.md` file for a date with ZERO parsed signals is EXPECTED, not a fault** (verified 2026-10-30 / 10-31): `generate_daily_signals.py` early-exits when it finds no signals, so no file is written. Days with no file (2026-10-16, 2026-10-21, 2026-10-30) all had 0 signals in `discord_trade_signal`. Before reporting a gap, check `SELECT signal_date, count(*) FROM discord_trade_signal GROUP BY signal_date` — only a date with signals but no file is a real gap (regenerate with `python Discord\myTrading\generate_daily_signals.py --date YYYY-MM-DD`).
 - **Signal-coverage rule:** after a fetch, compare message count vs signal count (`SELECT ... COUNT(s.message_id)`). As of 2026-10-26, 115/132 channel messages produce a signal row; the ~17 without are legitimately non-signals (market commentary, watchlist posts, chat). A message with no signal row is usually a parsing miss, not a market-commentary message.
 - **No natural dedup key on `discord_trade_signal`** — only `id` (PK) and `signal_id` (UUID unique). Repeated coach posts of the same trade create near-duplicate rows (e.g. BE 275 PUT existed as both msg 6495 and 6517). Dedupe manually by (stock_ticker, strike_price, expiration_date, premium_price).
+
+### `stock_technical` backfill — NO WRITER SCRIPT EXISTS (confirmed 2026-10-31)
+- `stock_technical` (23,977 rows) has been **stuck at max date 2026-09-29** for ~1 month; `stock_price` (8,332 rows) stuck at 2026-03-06.
+- **Root cause:** there is NO script in the workspace that WRITES `stock_technical`. Every file matching "stock_technical" is read-only (`hb_fresh.py`, `hb_moves.py`, `check_nvda.py`, `_nvda_*.py`, `memory/_eod_check.py`). The old `update_stock_data.py` (OHLCV + indicators writer) is **gone from the workspace**.
+- `update_stock_data_check.py` is **not** the OHLCV updater — it only checks market status/holiday and runs the **Finviz scrape+load** pipeline (`scrape_finviz.py` → `load_finviz_data.py`).
+- Fix = write a new backfill script: Yahoo Finance → `stock_technical` upsert, date column is **`date`**, NaN-safe (Yahoo returns NaN for incomplete days), `recommendation` ≤ 20 chars and `signals` ≤ 200 chars or the insert raises `StringDataRightTruncation`. Verify with `SELECT MIN(date), MAX(date), COUNT(*) FROM stock_technical WHERE ticker='NVDA'`. <!-- project: github.com/shaoweil9921/myFin -->
 
 ### DB Column Name Gotchas (verified 2026-10-22)
 - `stock_technical` date column is **`date`** (not `trade_date`); other cols: ticker, open, high, low, close, volume, rsi, macd, macd_signal, sma_20/50/200, bb_*, atr, signals, recommendation, stop_loss, tp1/2/3
@@ -859,6 +866,23 @@ Set-Service -Name RPCPerformanceService -StartupType Disabled; Stop-Service -Nam
 - After upgrade, if error `Missing workspace template: AGENTS.md`:
   - Copy `C:\Users\shaow\.openclaw\workspace\*.md` -> `C:\Users\shaow\AppData\Roaming\npm\node_modules\openclaw\docs\reference\templates\`
 - `openclaw` CLI not in PATH inside PowerShell scripts — use `node (npm root -g)\openclaw\openclaw.mjs`
+
+### NODE ENGINE CONSTRAINT ON THIS HOST (2026-10-31)
+- Installed Node: **24.19.0** (`C:\Program Files\nodejs\node.exe`)
+- OpenClaw **2026.10.6 / .10.7 / .10.8 / .10.9** require Node `>=24.22.1 <25 || >=26.12.1` -> **cannot install with current Node**
+- OpenClaw **2026.10.1 - 2026.10.5** require Node `>=24.16.0 <25 || >=26.1.0` -> **compatible**
+- `2026.10.0` does not exist (npm 404)
+- Failure mode is clean: npm preinstall aborts, live install untouched, gateway keeps running
+- To reach 2026.10.9 the **Node version must be upgraded first** (owner action, outside OpenClaw)
+- Symptom in log: `npm error [openclaw] error: this OpenClaw release requires Node >=24.22.1 <25 || >=26.12.1.`
+
+### EXEC POLICY DEGRADATION (2026-10-31)
+- Gateway log warns: `ignoring unprofiled safeBins entries (pwsh, python); use allowlist or define tools.exec.safeBinProfiles.<bin>`
+- `tools.exec.safeBins` with interpreter binaries (python/pwsh) is now IGNORED by the runtime
+- `exec-approvals.json` **no longer exists** at `C:\Users\shaowei_l\.openclaw\` (last copy stale: `backup\2026-05-07_09-07\`)
+- Consequence: exec intermittently returns `Approved executables: none` mid-session
+- Fix direction: use `tools.exec.allowlist` entries or define `tools.exec.safeBinProfiles.<bin>` instead of bare `safeBins`
+- `tools.exec.mode` is `full` and `safeBins` is `['python','pwsh']` in openclaw.json as of 2026-10-31
 
 ### RESTORE IF SOMETHING BREAKS
 - `D:\mylogs\openclaw_backup_win.ps1 [-ZipPath] <path> [-DryRun]`
