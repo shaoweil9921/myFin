@@ -750,6 +750,7 @@ Set-Service -Name RPCPerformanceService -StartupType Disabled; Stop-Service -Nam
 - Script: `hb_quotes.py` fetches watchlist quotes; extend its WATCH list to include flagged tickers for spot checks.
 - **Forced full load (added 2026-10-28, commit `7b228ec`):** `force_load_finviz_data.py` at workspace root loads `finviz_extracted_data.json` into a NEW scan_id, bypassing the same-day "already extracted" dedup that caused partial scans (e.g. scan 372 ok, 373 skipped, 374 forced full 20 rows). Use when a cron scan yields too few rows; do not wire it into the cron path.
 - `scan` table columns are **`scan_id`** (not `id`), `scan_name`, `scan_time`, `status`, `scan_note`, `source`.
+- **Partial-scan failure mode is RECURRING (2026-10-30):** cron scan 377 (07:30 ET) again landed only 2 rows. Remedy that worked: run `force_load_finviz_data.py` (loads `finviz_extracted_data.json` → new scan_id 379 = 17 rows). The 13:05 ET re-scan is always `skipped` by the same-day dedup, so it never repairs the partial scan — you must force-load manually. Check `finviz_extracted_data.json` mtime first: if it's from ~13:05 it holds the full 17-ticker snapshot.
 
 ### Discord Pipeline Health Check (verified 2026-10-26)
 - **Do NOT assume the Discord fetch is broken when it returns 0.** Check `discord_channel.last_fetched_at` first — if it is recent, the pipeline is healthy and there genuinely were no new posts.
