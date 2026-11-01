@@ -762,7 +762,11 @@ Set-Service -Name RPCPerformanceService -StartupType Disabled; Stop-Service -Nam
 - **Signal-coverage rule:** after a fetch, compare message count vs signal count (`SELECT ... COUNT(s.message_id)`). As of 2026-10-26, 115/132 channel messages produce a signal row; the ~17 without are legitimately non-signals (market commentary, watchlist posts, chat). A message with no signal row is usually a parsing miss, not a market-commentary message.
 - **No natural dedup key on `discord_trade_signal`** — only `id` (PK) and `signal_id` (UUID unique). Repeated coach posts of the same trade create near-duplicate rows (e.g. BE 275 PUT existed as both msg 6495 and 6517). Dedupe manually by (stock_ticker, strike_price, expiration_date, premium_price).
 
-### `stock_technical` backfill — NO WRITER SCRIPT EXISTS (confirmed 2026-10-31)
+### `stock_technical` backfill - RESOLVED 2026-11-01 (script now exists)
+- **`backfill_stock_technical.py`** (workspace root) is the new writer: Yahoo Finance -> `stock_technical` (upsert on `ticker,date`) + `stock_price` (upsert on `ticker,date`). Run: `python backfill_stock_technical.py [TICKER ...] [--since YYYY-MM-DD]`; default ticker set = ^VIX, AAPL, AMZN, GOOG, MSFT, MU, NVDA, ORCL, PLTR, SPY, TSLA, USO. It fetches 2y of Yahoo history so `sma_200` is populated, computes RSI14/MACD(12,26,9)/SMA20-50-200/BB20/ATR14, classifies `recommendation` (HOLD/BULLISH/BEARISH/CC_BULLISH, <=20 chars) and `signals` (semicolon labels, <=200 chars), and is NaN-safe. <!-- project: github.com/shaoweil9921/myFin -->
+- **Result 2026-11-01:** `stock_technical` max date moved 2026-09-29 -> **2026-10-30** (24,299 rows); `stock_price` max date moved 2026-03-06 -> **2026-10-30** (SPY history intact, 8,362 rows). Verified with `SELECT MIN(date), MAX(date), COUNT(*) FROM stock_technical WHERE ticker='NVDA'` -> (2020-01-02, 2026-10-30, 1717). <!-- project: github.com/shaoweil9921/myFin -->
+- **Before (historical, 2026-10-31 finding):** `stock_technical` (23,977 rows) had been **stuck at max date 2026-09-29** for ~1 month; `stock_price` (8,332 rows) stuck at 2026-03-06. Root cause: no script in the workspace wrote `stock_technical` - the old `update_stock_data.py` was gone.
+- **New cron "Stock Technical Backfill"** (created 2026-11-01): `15 17 * * 1-5` America/New_York (5:15 PM ET, Mon-Fri, post-close), session=isolated, delivery mode `none`. Runs `backfill_stock_technical.py` then verifies `SELECT ticker, MAX(date), COUNT(*) FROM stock_technical GROUP BY ticker`. Create pattern that works with multiple channels configured: `openclaw cron add --cron "15 17 * * 1-5" --tz America/New_York --session isolated --no-deliver` (use `--no-deliver`, NOT `--announce`, which errors out asking for an explicit channel). <!-- project: github.com/shaoweil9921/myFin -->
 - `stock_technical` (23,977 rows) has been **stuck at max date 2026-09-29** for ~1 month; `stock_price` (8,332 rows) stuck at 2026-03-06.
 - **Root cause:** there is NO script in the workspace that WRITES `stock_technical`. Every file matching "stock_technical" is read-only (`hb_fresh.py`, `hb_moves.py`, `check_nvda.py`, `_nvda_*.py`, `memory/_eod_check.py`). The old `update_stock_data.py` (OHLCV + indicators writer) is **gone from the workspace**.
 - `update_stock_data_check.py` is **not** the OHLCV updater — it only checks market status/holiday and runs the **Finviz scrape+load** pipeline (`scrape_finviz.py` → `load_finviz_data.py`).
@@ -884,10 +888,28 @@ Set-Service -Name RPCPerformanceService -StartupType Disabled; Stop-Service -Nam
 - Fix direction: use `tools.exec.allowlist` entries or define `tools.exec.safeBinProfiles.<bin>` instead of bare `safeBins`
 - `tools.exec.mode` is `full` and `safeBins` is `['python','pwsh']` in openclaw.json as of 2026-10-31
 
+### UPDATE CANNOT BE PINNED VIA CONTROL PLANE (2026-11-01)
+- `/update` and `gateway(action="update.run")` **cannot pin a version** — they resolve `update.channel` -> registry target -> `latest`
+- `update.run` RPC has NO `tag`/`version`/`spec` param; its `target` field is **Git-sha only** (`kind: "git"`, `sha`)
+- Only the CLI's `--tag` can pin: `openclaw update --tag 2026.10.5 --yes`
+- No update channel maps to a Node-24.19.0-compatible build: `stable`=2026.10.9 (needs 24.22.1), `extended-stable`=2026.9.36 (needs 24.22.1), `beta`=2026.10.10-beta.4 (needs 24.22.1)
+- `2026.10.10-beta.5` is Node-compatible (`>=24.16.0`) but is a moving target
+
+### AGENT EXEC SHELL CANNOT SWAP THE PACKAGE (2026-11-01)
+- Running `openclaw update` from the agent's exec shell fails at `managed-service-preflight` with code `inside-gateway-process-tree`
+- Reason: the agent shell is a child of the Gateway process tree; the updater correctly refuses to let an in-gateway command replace the package that owns it
+- This is **expected behaviour**, not a bug — the guard works
+- The owner must run `openclaw update --tag 2026.10.5 --yes` from a **standalone Windows Terminal** outside the Gateway process tree
+- A standalone run acknowledges with **exit code 75** (`EX_TEMPFAIL`) = "accepted, background work running", NOT failure
+- Recovery after such a refusal: no rollback needed, install untouched, staging dir auto-removed, `openclaw update repair` has nothing to do
+
 ### RESTORE IF SOMETHING BREAKS
 - `D:\mylogs\openclaw_backup_win.ps1 [-ZipPath] <path> [-DryRun]`
 - Or manually: extract zip, copy openclaw.json + workspace/ back to `~/.openclaw/`
 - Cron jobs: `openclaw cron import --file <cron_jobs.json>`
+- **Current backups:** `C:\Users\shaowei_l\.openclaw\backup\2026-11-01_pre-upgrade\` (9 files) and `2026-10-31_pre-upgrade\`
+- **Current automations backup:** `memory\automations-backup-2026-11-01.json` — **20 jobs** (15 enabled / 5 disabled)
+- Cron job count grew from 19 to **20** on 2026-10-31 when `Stock Technical Backfill` (`6bcde524-fdb4-4566-80d9-ab8cdc5fb19b`) was added
 
 ## OpenClaw / Tailscale Remote Access (RESOLVED 2026-03-27)
 
