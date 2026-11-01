@@ -1,0 +1,123 @@
+﻿  "runs": [
+    {
+      "runId": "a062b958-0adc-470e-959d-6a5b584665d2",
+      "createdAtMs": 1793575723131,
+      "updatedAtMs": 1793575981986,
+      "trigger": "cli",
+      "phase": "finished",
+      "status": "failed",
+      "reason": "managed-service-preflight",
+      "origin": {
+        "admission": {
+          "owner": "installed"
+        },
+        "driver": {
+          "host": "dolphinmaster",
+          "pid": 19324,
+          "startIdentity": "1793575711405"
+        },
+        "nextAction": "This command is running inside the gateway process tree (gateway PID 7808).\nStopping or restarting the gateway from here would kill this command, so it cannot safely manage the gateway that owns it.\nFrom chat, the OpenClaw owner can start the update with the gateway update action or /update, which hands it to a managed helper."
+      },
+      "target": {
+        "tag": "2026.10.5",
+        "kind": "package",
+        "version": "2026.10.5",
+        "installationMethod": "npm-global"
+      },
+      "before": {
+        "version": "2026.9.9"
+      },
+      "after": {},
+      "steps": [
+        {
+          "step": "requested",
+          "status": "failed",
+          "startedAtMs": 1793575723131,
+          "endedAtMs": 1793575981986
+        },
+        {
+          "step": "driver:adopted",
+          "status": "completed",
+          "endedAtMs": 1793575724104
+        },
+        {
+          "step": "installation-inspection",
+          "status": "completed",
+          "endedAtMs": 1793575727598
+        },
+        {
+          "step": "target-resolution",
+          "status": "completed",
+          "startedAtMs": 1793575727758,
+          "endedAtMs": 1793575728872
+        },
+        {
+          "step": "snapshot-space-preflight",
+          "status": "completed",
+          "exitCode": 0
+        },
+        {
+          "step": "diagnostic:snapshot-space-preflight",
+          "status": "completed",
+          "detail": "Snapshot size estimate: plugin copies and registered external databases are measured after staging."
+        },
+        {
+          "step": "diagnostic:snapshot-space-preflight:2",
+          "status": "completed",
+          "detail": "Initial snapshot needs 1.1 GiB for 239 MiB of known SQLite files and temporary working space."
+        },
+        {
+          "step": "diagnostic:snapshot-space-preflight:3",
+          "status": "completed",
+          "detail": "explicit-tmpdir C:\\Users\\SHAOWE~1\\AppData\\Local\\Temp: 1.1 GiB needed; 577 GiB free."
+        },
+        {
+          "step": "diagnostic:snapshot-space-preflight:4",
+          "status": "completed",
+          "detail": "state-volume ~\\.openclaw.update-captures: 1.1 GiB needed; 577 GiB free."
+        },
+        {
+          "step": "diagnostic:snapshot-space-preflight:5",
+          "status": "completed",
+          "detail": "SQLite family ~\\.openclaw\\agents\\main\\agent\\openclaw-agent.sqlite: 204 MiB (database and supporting files)."
+        },
+        {
+          "step": "diagnostic:snapshot-space-preflight:6",
+          "status": "completed",
+          "detail": "SQLite family ~\\.openclaw\\agents\\openclaw\\agent\\openclaw-agent.sqlite: 1 MiB (database and supporting files)."
+        },
+        {
+          "step": "diagnostic:snapshot-space-preflight:7",
+          "status": "completed",
+          "detail": "SQLite family ~\\.openclaw\\state\\openclaw.sqlite: 34 MiB (database and supporting files)."
+        },
+        {
+          "step": "managed-service-preflight",
+          "status": "failed",
+          "exitCode": 1,
+          "detail": "Exit code: 1; The update is running inside the Gateway process tree. Use the Gateway update action for a managed handoff, or run openc",
+          "failureFacts": [
+            {
+              "check": "managed-service-preflight",
+              "code": "inside-gateway-process-tree",
+              "message": "The update is running inside the Gateway process tree. Use the Gateway update action for a managed handoff, or run openclaw update from a terminal outside the Gateway process tree."
+            }
+          ]
+        }
+      ],
+      "verification": {
+        "recovery": {
+          "serviceRestartSafe": true,
+          "version": "2026.9.9"
+        }
+      },
+      "repair": [],
+      "confirmedAtMs": null,
+      "finishedAtMs": 1793575981986,
+      "downtimeMs": null,
+      "admission": {
+        "owner": "installed"
+      }
+    }
+  ]
+}
