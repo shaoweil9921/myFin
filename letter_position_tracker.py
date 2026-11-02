@@ -11,12 +11,16 @@ from datetime import date, timedelta
 sys.path.insert(0, str(pathlib.Path(__file__).parent / "Discord" / "myTrading"))
 from _db_pw import DB_CONFIG
 
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+from option_validation import validate_option, occ_symbol
+
 DB = DB_CONFIG
 
 def db():
     return psycopg2.connect(**DB)
 
 def yf_opt(ticker, strike, exp, otype):
+    """Quote a Yahoo option symbol. Assumes the symbol was already validated."""
     try:
         exp_str = exp.strftime('%y%m%d')
         code = 'C' if otype == 'call' else 'P'
@@ -78,13 +82,16 @@ def fill_pending(conn, today):
 def update_open(conn, today):
     cur = conn.cursor()
     cur.execute("""
-        SELECT position_id, ticker, option_type, strike, expiration, entry_price, profit_target_pct
-        FROM subscription_letter_position WHERE status='open'
+        SELECT lp.position_id, lp.ticker, lp.option_type, lp.strike, lp.expiration,
+               lp.entry_price, lp.profit_target_pct, sl.letter_date
+        FROM subscription_letter_position lp
+        JOIN subscription_letter sl ON lp.letter_id = sl.letter_id
+        WHERE lp.status='open'
     """)
     rows = cur.fetchall()
     cur.close()
-    result = {'updated': 0, 'closed': 0, 'expired': 0, 'alerts': []}
-    for (pos_id, ticker, otype, strike, exp, entry_price, target_pct) in rows:
+    result = {'updated': 0, 'closed': 0, 'expired': 0, 'alerts': [], 'invalid': 0}
+    for (pos_id, ticker, otype, strike, exp, entry_price, target_pct, letter_date) in rows:
         if entry_price is None:
             # No entry price recorded — treat as expired if past expiration, else skip
             if today >= exp:
@@ -98,10 +105,35 @@ def update_open(conn, today):
             continue
         ep = float(entry_price)
         if ep <= 0: continue
-        opt_price = alpaca_opt(ticker, float(strike), exp, otype) or yf_opt(ticker, float(strike), exp, otype)
+
+        expired = today >= exp
+
+        # Validate the contract BEFORE composing/quoting a symbol. A typo'd
+        # ticker or an unlisted strike must never be priced - otherwise the
+        # tracker records a price for an option that was never in the letter.
+        #
+        # Expired positions are validated WITHOUT the chain check and without
+        # the staleness window: once an option expires its chain is gone, so a
+        # chain lookup would fail and we would skip the row entirely and
+        # never mark it expired. Syntax is still checked so a malformed
+        # contract is reported rather than silently booked.
+        ok, reason, sym = validate_option(
+            yf, ticker, strike, exp, otype,
+            letter_date=letter_date,
+            today=None if expired else today,
+            check_chain=not expired)
+        if not ok:
+            result['invalid'] += 1
+            result['alerts'].append(
+                f"INVALID CONTRACT: {ticker} {otype.upper()} ${strike} exp {exp} - {reason}")
+            print(f"  INVALID: {ticker} {otype.upper()} ${strike} exp {exp} - {reason}")
+            continue
+
+        opt_price = None
+        if not expired:
+            opt_price = alpaca_opt(ticker, float(strike), exp, otype) or yf_opt(ticker, float(strike), exp, otype)
         pnl = ((opt_price - ep) / ep * 100) if opt_price else 0.0
         hit = pnl >= float(target_pct)
-        expired = today >= exp
         cur = conn.cursor()
         if expired:
             cur.execute("UPDATE subscription_letter_position SET current_price=%s, pnl_pct=%s, exit_price=0, exit_date=%s, status='expired' WHERE position_id=%s",
