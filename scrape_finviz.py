@@ -106,6 +106,12 @@ def main():
     for r in rows[:3]:
         print(f"  {r['ticker']}: ${r['price']}, vol={r['volume']}, chg={r['change_pct']}%")
 
+    if not rows:
+        # Do NOT clobber the previous good extract with an empty list.
+        # (Finviz returns 0 rows pre-market / when the screener JSON has no data.)
+        print("No rows extracted - keeping previous finviz_extracted_data.json untouched")
+        return False
+
     out_path = r'C:\Users\shaowei_l\.openclaw\workspace\finviz_extracted_data.json'
     with open(out_path, 'w') as f:
         json.dump(rows, f, indent=2)

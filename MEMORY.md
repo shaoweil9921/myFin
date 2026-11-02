@@ -750,6 +750,7 @@ Set-Service -Name RPCPerformanceService -StartupType Disabled; Stop-Service -Nam
 - **Always sanity-check GapperMid movers against live quotes (Yahoo chart API) before reporting them.**
 - Script: `hb_quotes.py` fetches watchlist quotes; extend its WATCH list to include flagged tickers for spot checks.
 - **Forced full load (added 2026-10-28, commit `7b228ec`):** `force_load_finviz_data.py` at workspace root loads `finviz_extracted_data.json` into a NEW scan_id, bypassing the same-day "already extracted" dedup that caused partial scans (e.g. scan 372 ok, 373 skipped, 374 forced full 20 rows). Use when a cron scan yields too few rows; do not wire it into the cron path.
+- **Empty-extract guard (added 2026-11-02):** `scrape_finviz.py` now returns early (exit 1) **without overwriting** `finviz_extracted_data.json` when Finviz yields 0 rows. Before this, a pre-market/empty screener response wiped the previous 20-row extract to `[]` (data loss). Finviz returns very few rows before ~10 AM ET (2026-11-02 08:00 → 1 row, ORLY), so the "Sanity-check rows per scan" rule still applies.
 - `scan` table columns are **`scan_id`** (not `id`), `scan_name`, `scan_time`, `status`, `scan_note`, `source`.
 - **Partial-scan failure mode is RECURRING (2026-10-30):** cron scan 377 (07:30 ET) again landed only 2 rows. Remedy that worked: run `force_load_finviz_data.py` (loads `finviz_extracted_data.json` → new scan_id 379 = 17 rows). The 13:05 ET re-scan is always `skipped` by the same-day dedup, so it never repairs the partial scan — you must force-load manually. Check `finviz_extracted_data.json` mtime first: if it's from ~13:05 it holds the full 17-ticker snapshot.
 
@@ -768,10 +769,9 @@ Set-Service -Name RPCPerformanceService -StartupType Disabled; Stop-Service -Nam
 - **Result 2026-11-01:** `stock_technical` max date moved 2026-09-29 -> **2026-10-30** (24,299 rows); `stock_price` max date moved 2026-03-06 -> **2026-10-30** (SPY history intact, 8,362 rows). Verified with `SELECT MIN(date), MAX(date), COUNT(*) FROM stock_technical WHERE ticker='NVDA'` -> (2020-01-02, 2026-10-30, 1717). <!-- project: github.com/shaoweil9921/myFin -->
 - **Before (historical, 2026-10-31 finding):** `stock_technical` (23,977 rows) had been **stuck at max date 2026-09-29** for ~1 month; `stock_price` (8,332 rows) stuck at 2026-03-06. Root cause: no script in the workspace wrote `stock_technical` - the old `update_stock_data.py` was gone.
 - **New cron "Stock Technical Backfill"** (created 2026-11-01): `15 17 * * 1-5` America/New_York (5:15 PM ET, Mon-Fri, post-close), session=isolated, delivery mode `none`. Runs `backfill_stock_technical.py` then verifies `SELECT ticker, MAX(date), COUNT(*) FROM stock_technical GROUP BY ticker`. Create pattern that works with multiple channels configured: `openclaw cron add --cron "15 17 * * 1-5" --tz America/New_York --session isolated --no-deliver` (use `--no-deliver`, NOT `--announce`, which errors out asking for an explicit channel). <!-- project: github.com/shaoweil9921/myFin -->
-- `stock_technical` (23,977 rows) has been **stuck at max date 2026-09-29** for ~1 month; `stock_price` (8,332 rows) stuck at 2026-03-06.
-- **Root cause:** there is NO script in the workspace that WRITES `stock_technical`. Every file matching "stock_technical" is read-only (`hb_fresh.py`, `hb_moves.py`, `check_nvda.py`, `_nvda_*.py`, `memory/_eod_check.py`). The old `update_stock_data.py` (OHLCV + indicators writer) is **gone from the workspace**.
+- **Historical (2026-10-31, now stale — superseded above):** `stock_technical` had been stuck at max date 2026-09-29 for ~1 month; `stock_price` stuck at 2026-03-06. Root cause: the old `update_stock_data.py` writer was gone.
 - `update_stock_data_check.py` is **not** the OHLCV updater — it only checks market status/holiday and runs the **Finviz scrape+load** pipeline (`scrape_finviz.py` → `load_finviz_data.py`).
-- Fix = write a new backfill script: Yahoo Finance → `stock_technical` upsert, date column is **`date`**, NaN-safe (Yahoo returns NaN for incomplete days), `recommendation` ≤ 20 chars and `signals` ≤ 200 chars or the insert raises `StringDataRightTruncation`. Verify with `SELECT MIN(date), MAX(date), COUNT(*) FROM stock_technical WHERE ticker='NVDA'`. <!-- project: github.com/shaoweil9921/myFin -->
+- Schema guardrails for `stock_technical` writes: date column is **`date`**, NaN-safe (Yahoo returns NaN for incomplete days), `recommendation` ≤ 20 chars and `signals` ≤ 200 chars or the insert raises `StringDataRightTruncation`. Verify with `SELECT MIN(date), MAX(date), COUNT(*) FROM stock_technical WHERE ticker='NVDA'`. <!-- project: github.com/shaoweil9921/myFin -->
 
 ### DB Column Name Gotchas (verified 2026-10-22)
 - `stock_technical` date column is **`date`** (not `trade_date`); other cols: ticker, open, high, low, close, volume, rsi, macd, macd_signal, sma_20/50/200, bb_*, atr, signals, recommendation, stop_loss, tp1/2/3
@@ -1039,7 +1039,7 @@ To run the same analysis next week:
 - Each vault: own .git, own remote, own GitHub repo
 
 ## OpenClaw Version
-- Current: **2026.9.9** (2026.9.8 → 2026.9.9 via npm update, 2026-10-10) — npm latest as of 2026-10-29 is **2026.10.9** (installed still trails; upgrade pending user decision)
+- **Installed (verified 2026-11-02 via `npm ls -g openclaw`): 2026.10.5** (the older 2026.9.9 note here was stale — corrected). npm latest = **2026.10.9**. Upgrade is **blocked on Node**: every channel (stable 2026.10.9, extended-stable 2026.9.36, beta 2026.10.10-beta.4) requires Node >= 24.22.1; host has Node 24.19.0. Owner action: upgrade Node first, then `npm i -g openclaw@latest --no-fund --no-audit`.
 - Gateway WS URL: `ws://localhost:18789` — use `localhost` NOT `127.0.0.1` (gateway listens on IPv6 only)
 - Config: `C:\Users\shaowei_l\.openclaw\openclaw.json`
 - Workspace: `C:\Users\shaowei_l\.openclaw\workspace`
