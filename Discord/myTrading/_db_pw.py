@@ -1,22 +1,22 @@
-r"""Shared DB password utility — reads from Windows registry HKCU\Environment.
-All Discord pipeline scripts should import this instead of hardcoding env var lookups.
+"""Thin shim: re-export the canonical workspace-level db_pw helpers.
+
+The canonical implementation lives at <workspace>/db_pw.py so that every
+project (finviz/, ibd/, Discord/myTrading/, root scripts) resolves the
+password the same way instead of each copy-pasting a literal.
 """
-import os, winreg
+import os
+import sys
 
-def get_db_pw():
-    """Read DB_PW from Windows registry. Falls back to DB_PASSWORD env var."""
-    try:
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Environment")
-        db_pw, _ = winreg.QueryValueEx(key, "DB_PW")
-        winreg.CloseKey(key)
-        return db_pw
-    except Exception:
-        return os.environ.get("DB_PASSWORD", "")
+# Walk up from this file until we find the canonical db_pw.py
+_d = os.path.dirname(os.path.abspath(__file__))
+while True:
+    if os.path.exists(os.path.join(_d, "db_pw.py")):
+        if _d not in sys.path:
+            sys.path.insert(0, _d)
+        break
+    _nd = os.path.dirname(_d)
+    if _nd == _d:
+        break
+    _d = _nd
 
-DB_CONFIG = {
-    "host": "127.0.0.1",
-    "port": 5432,
-    "user": "postgres",
-    "dbname": "fintech",
-    "password": get_db_pw(),
-}
+from db_pw import get_db_pw, require_db_pw, DB_CONFIG  # noqa: E402,F401

@@ -7,13 +7,8 @@ Usage:
 """
 import os, sys, argparse, importlib
 
-DB_CONFIG = {
-    'host': '127.0.0.1',
-    'port': 5432,
-    'user': 'postgres',
-    'password': os.environ.get('DB_PASSWORD', ''),
-    'dbname': 'fintech',
-}
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _db_pw import DB_CONFIG
 
 
 def get_conn():

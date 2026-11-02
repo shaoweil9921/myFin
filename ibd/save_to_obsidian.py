@@ -9,6 +9,8 @@ Usage:
 Output:
     C:\\Data\\Obsidian_root\\Obsidian_trading\\ibd\\<YYYY-MM-DD>_ibd_50.md
 """
+
+from _db_pw import get_db_pw as _db_pw
 import psycopg2
 import os
 import argparse
@@ -24,7 +26,7 @@ DB_CONFIG = {
     "port": 5432,
     "dbname": "fintech",
     "user": "postgres",
-    "password": "asdfghjk1234%",
+    "password": _db_pw(),
 }
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,8 @@
+
+from db_pw import get_db_pw as _db_pw
 import psycopg2
 
-conn = psycopg2.connect(user='postgres', host='127.0.0.1', database='fintech', password='asdfghjk1234%')
+conn = psycopg2.connect(user='postgres', host='127.0.0.1', database='fintech', password=_db_pw())
 conn.autocommit = True
 cur = conn.cursor()
 

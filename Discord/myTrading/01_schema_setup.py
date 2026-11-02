@@ -3,10 +3,8 @@ import os, sys, psycopg2
 
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
-DB_CONFIG = {
-    "host": "127.0.0.1", "port": 5432, "user": "postgres",
-    "password": os.environ.get("DB_PASSWORD", ""), "dbname": "fintech",
-}
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _db_pw import DB_CONFIG
 
 def get_conn():
     return psycopg2.connect(**DB_CONFIG)

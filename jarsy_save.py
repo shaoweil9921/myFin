@@ -1,6 +1,8 @@
 """
 Jarsy Save — reads jarsy_presale.json and jarsy_live.json, saves to DB.
 """
+
+from db_pw import get_db_pw as _db_pw
 import json, os, psycopg2, sys
 
 DB_CONFIG = {
@@ -8,7 +10,7 @@ DB_CONFIG = {
     'port': 5432,
     'dbname': 'fintech',
     'user': 'postgres',
-    'password': 'asdfghjk1234%'
+    'password': _db_pw()
 }
 
 PRESALE_FILE = r"C:\Users\shaowei_l\.openclaw\workspace\jarsy_presale.json"

@@ -249,7 +249,8 @@ Keys look like `agent:main:cron:<job-id>` / `agent:main:main`. Archiving keeps t
 
 ### fintech DB Credentials
 - Host: 127.0.0.1, Port: 5432
-- User: postgres, Password: asdfghjk1234%
+- User: postgres
+- Password: resolved at runtime via `db_pw.get_db_pw()` — registry `HKCU\Environment\DB_PW`, falling back to `DB_PW`/`DB_PASSWORD` env vars. Never store the literal here. <!-- project: github.com/shaoweil9921/myFin -->
 - Database: fintech
 
 ### Stock Watchlist (as of 2026-03-23)

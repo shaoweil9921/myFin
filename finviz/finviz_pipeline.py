@@ -2,6 +2,8 @@
 Finviz GapperMid Extraction Script - v2
 Full pipeline: holiday check -> insert scan -> extract -> load to DB -> notify
 """
+
+from _db_pw import get_db_pw as _db_pw
 import json
 import time
 import re
@@ -13,7 +15,7 @@ from datetime import datetime
 # Config
 TELEGRAM_CHAT_ID = "7923250382"
 FINVIZ_URL = "https://finviz.com/screener.ashx?v=111&f=cap_midover,sh_curvol_o750,sh_price_o1,sh_relvol_o3&o=-change"
-DB_PWD = "asdfghjk1234%"
+DB_PWD = _db_pw()
 
 def send_telegram(msg):
     try:

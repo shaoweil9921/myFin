@@ -1,3 +1,5 @@
+
+from db_pw import get_db_pw as _db_pw
 import fitz
 import re
 import psycopg2
@@ -62,7 +64,7 @@ def get_date_from_filename(filename, folder_year):
 def process_folder(folder_path):
     files = sorted([f for f in os.listdir(folder_path) if f.endswith('.pdf')])
     
-    conn = psycopg2.connect(host="127.0.0.1", database="fintech", user="postgres", password="asdfghjk1234%")
+    conn = psycopg2.connect(host="127.0.0.1", database="fintech", user="postgres", password=_db_pw())
     cur = conn.cursor()
     
     # Determine year from folder path

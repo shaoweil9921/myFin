@@ -12,6 +12,8 @@ Environment:
     DISCORD_BOT_TOKEN - for fetching channel/server metadata
 """
 
+from _db_pw import get_db_pw as _db_pw
+
 import os
 import sys
 import re
@@ -36,7 +38,7 @@ DB_CONFIG = {
     "host": "127.0.0.1",
     "port": 5432,
     "user": "postgres",
-    "password": "asdfghjk1234%",
+    "password": _db_pw(),
     "dbname": "fintech",
 }
 

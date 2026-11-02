@@ -1,3 +1,5 @@
+
+from db_pw import get_db_pw as _db_pw
 import psycopg2
 import json
 import sys
@@ -18,7 +20,7 @@ def get_db_pw():
 
 db_pw = get_db_pw()
 if not db_pw:
-    db_pw = os.environ.get('DB_PASSWORD', 'asdfghjk1234%')
+    db_pw = os.environ.get('DB_PASSWORD', '')
 
 print(f"DB_PW: {'from registry' if get_db_pw() else 'from env'}")
 

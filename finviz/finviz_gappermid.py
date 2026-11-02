@@ -1,3 +1,5 @@
+
+from _db_pw import get_db_pw as _db_pw
 import psycopg2
 import json
 import sys
@@ -6,7 +8,7 @@ DB_CONFIG = {
     'host': '127.0.0.1',
     'dbname': 'fintech',
     'user': 'postgres',
-    'password': 'asdfghjk1234%',
+    'password': _db_pw(),
     'port': 5432
 }
 

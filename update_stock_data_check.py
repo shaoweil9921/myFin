@@ -4,6 +4,8 @@ Checks market holidays/early closes and skips fetch if market is closed.
 Runs the full Finviz pipeline (scrape + load) only on trading days.
 Uses DB_PW from registry to handle subprocess DB access.
 """
+
+from db_pw import get_db_pw as _db_pw
 import psycopg2
 import subprocess
 import sys
@@ -34,7 +36,7 @@ def get_db_kwargs():
     if db_pw:
         return dict(host='127.0.0.1', dbname='fintech', user='postgres', password=db_pw)
     # Fallback: try DB_PASSWORD from env
-    db_pw = os.environ.get('DB_PASSWORD', 'asdfghjk1234%')
+    db_pw = os.environ.get('DB_PASSWORD', '')
     return dict(host='127.0.0.1', dbname='fintech', user='postgres', password=db_pw)
 
 

@@ -1,3 +1,5 @@
+
+from db_pw import get_db_pw as _db_pw
 import psycopg2
 
 DB_CONFIG = {
@@ -5,7 +7,7 @@ DB_CONFIG = {
     'port': 5432,
     'dbname': 'fintech',
     'user': 'postgres',
-    'password': 'asdfghjk1234%'
+    'password': _db_pw()
 }
 
 conn = psycopg2.connect(**DB_CONFIG)

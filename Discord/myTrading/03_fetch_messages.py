@@ -14,13 +14,8 @@ import urllib.parse
 
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
-DB_CONFIG = {
-    "host": "127.0.0.1",
-    "port": 5432,
-    "user": "postgres",
-    "password": os.environ.get("DB_PASSWORD", ""),
-    "dbname": "fintech",
-}
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _db_pw import DB_CONFIG
 
 BOT_TOKEN = os.environ.get("DISCORD_BOT_TOKEN", "")
 BASE_URL = "https://discord.com/api/v10"
@@ -89,15 +84,22 @@ def discord_request(method, url, **kwargs):
     return resp
 
 
-def fetch_channel_messages(channel_id, before_msg_id=None, limit=100):
-    """Fetch messages from a Discord channel."""
+def fetch_channel_messages(channel_id, before_msg_id=None, after_msg_id=None, limit=100):
+    """Fetch messages from a Discord channel.
+    
+    Use `before_msg_id` for newest-first pagination (default — no cursor).
+    Use `after_msg_id` for oldest-first pagination starting after a cursor.
+    Discord caps at 100 per request; pass limit up to that.
+    """
     url = f"{BASE_URL}/channels/{channel_id}/messages"
     params = {'limit': min(limit, 100)}
     if before_msg_id:
         params['before'] = before_msg_id
+    if after_msg_id:
+        params['after'] = after_msg_id
     resp = discord_request('GET', url, params=params)
     if not resp:
-        return []
+        return None  # None = error, [] = no messages
     return resp.json()
 
 
@@ -122,6 +124,19 @@ def parse_message(msg):
     content = msg.get('content', '')
     has_mentions    = len(mentions) > 0
     has_bot_mention = any(m.get('bot', False) for m in mentions)
+
+    # Override author_username from message content (Coach Baylor, TradingWithAshley, etc.)
+    # when it follows the pattern: "Coach Name — M/D/YYYY H:MM AM/PM"
+    author_username_from_api = author.get('username', '')
+    coach_override = author_username_from_api
+    if content:
+        first_line = content.split('\n', 1)[0].strip()
+        ts_match = _AUTHOR_TS_PAT.match(first_line)
+        if ts_match:
+            coach_name = ts_match.group(1).strip()
+            # Only override if we got a meaningful coach name (not empty or generic)
+            if coach_name and len(coach_name) > 1 and coach_name not in ('Coach', 'Trading', 'Signal'):
+                coach_override = coach_name
 
     embed_titles       = '\n'.join(e.get('title', '') or '' for e in embeds if e.get('title'))
     embed_descriptions = '\n'.join(e.get('description', '') or '' for e in embeds if e.get('description'))
@@ -167,7 +182,7 @@ def parse_message(msg):
     return {
         'message_id':          str(msg.get('id', '')),
         'author_id':           str(author.get('id', '')),
-        'author_username':     author.get('username', ''),
+        'author_username':     coach_override,
         'content':             content,
         'cleaned_content':     None,   # set in save step
         'embed_titles':        embed_titles or None,
@@ -205,9 +220,10 @@ def clean_text(text):
 
 
 _AUTHOR_TS_PAT = re.compile(
-    # Captures: username (everything before first digit), date, time, AM/PM
-    # Accepts em-dash, en-dash, replacement char, or any non-digit as separator
-    r'^(.+?)\s*\D\s*(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})\s+(\d{1,2}:\d{2})\s*(AM|PM|am|pm)',
+    # Captures: username, optional date, time, AM/PM
+    # "Coach Name — 9/30/2026 10:17 AM"  OR  "Coach Name — 11:44 AM"
+    # Uses .*? (non-greedy) before em-dash to capture full name without over-matching
+    r'^(.+?)\s*\u2014\s*(?:(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})\s+)?(\d{1,2}:\d{2})\s*(AM|PM|am|pm)',
     re.UNICODE
 )
 _Month_MAP = {
@@ -231,15 +247,20 @@ def parse_author_timestamp(content):
     date_str, time_str = m.group(2), m.group(3)
     ampm = m.group(4).upper()
 
-    # Parse date
-    for fmt in ('%m/%d/%Y', '%m/%d/%y', '%m-%d-%Y', '%m-%d-%y'):
-        try:
-            dt = datetime.strptime(date_str, fmt)
-            break
-        except ValueError:
-            continue
+    # Parse date (date_str may be None if message has only time, e.g. "Name — 11:44 AM")
+    if date_str:
+        for fmt in ('%m/%d/%Y', '%m/%d/%y', '%m-%d-%Y', '%m-%d-%y'):
+            try:
+                dt = datetime.strptime(date_str, fmt)
+                break
+            except ValueError:
+                continue
+        else:
+            return None
     else:
-        return None
+        # No date in message — use today's date as fallback
+        today = datetime.now().date()
+        dt = datetime(today.year, today.month, today.day)
 
     # Parse time
     try:
@@ -369,23 +390,48 @@ def save_messages(conn, channel_db_id, account_id, channel_discord_id, messages)
 
 
 def fetch_channel(conn, channel_row):
-    """Fetch new messages for one channel."""
+    """Fetch new messages for one channel since last_message_id cursor.
+    
+    Uses Discord 'after' pagination to get only genuinely new messages,
+    handling overflow (many new messages >100) by paginating until caught up.
+    """
     ch_db_id, ch_discord_id, ch_name, last_msg_id, account_id = channel_row
 
-    # Always fetch fresh messages (no before= param) and dedup via ON CONFLICT.
-    # Using before_msg_id was wrong: Discord IDs aren't monotonically tied to
-    # post time in the way needed for pagination, so 'before=cursor' often
-    # skips newer messages. ON CONFLICT (channel_id, message_id) DO UPDATE
-    # handles any duplicates safely.
-    messages = fetch_channel_messages(ch_discord_id, before_msg_id=None)
-    if messages is None:
-        return 0  # error
+    new_messages = []
+    page_count = 0
+    
+    if last_msg_id:
+        # Fetch messages AFTER the cursor — get only genuinely new ones
+        while True:
+            page_count += 1
+            page = fetch_channel_messages(ch_discord_id, after_msg_id=last_msg_id)
+            if page is None:
+                break  # error, already logged
+            if not page:
+                break  # no more new messages
+            # page is oldest-first when using 'after' (chronological)
+            new_messages.extend(page)
+            # Advance cursor to the newest message in this page
+            last_msg_id = page[-1]['id']
+            if len(page) < 100:
+                break  # last page — we're caught up
+            # Otherwise keep paginating for more new messages
+    else:
+        # First run — no cursor yet. Fetch newest 100 to establish cursor.
+        # Save all as new (no 'after' param).
+        page = fetch_channel_messages(ch_discord_id, before_msg_id=None)
+        if page is None:
+            return 0
+        new_messages.extend(page)
 
-    if not messages:
+    if not new_messages:
         return 0
 
-    # Discord returns newest first; save in that order
-    saved = save_messages(conn, ch_db_id, account_id, ch_discord_id, messages)
+    # new_messages is oldest-first; save_messages expects newest-first.
+    # Reverse so the cursor saved is the newest message ID.
+    new_messages.reverse()
+
+    saved = save_messages(conn, ch_db_id, account_id, ch_discord_id, new_messages)
     return saved
 
 

@@ -1,11 +1,13 @@
+
+from _db_pw import get_db_pw as _db_pw
 import psycopg2
 import json
 import sys
 
-DB_PASSWORD = 'asdfghjk1234%'
+DB_PW = _db_pw()
 
 def get_conn():
-    return psycopg2.connect(host='127.0.0.1', database='fintech', user='postgres', password=DB_PASSWORD)
+    return psycopg2.connect(host='127.0.0.1', database='fintech', user='postgres', password=DB_PW)
 
 def check_holiday():
     conn = get_conn()
