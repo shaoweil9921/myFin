@@ -277,7 +277,10 @@ def save_messages(conn, channel_db_id, account_id, channel_discord_id, messages)
     if not messages:
         return 0
 
-    last_msg_id = messages[0]['id']
+    # The cursor must always be the NEWEST message id, regardless of the
+    # order in which messages are passed in. Discord snowflakes are
+    # monotonically increasing, so the max numeric id is the newest message.
+    last_msg_id = max((m['id'] for m in messages), key=int)
     saved = 0
     cur = conn.cursor()
 
@@ -409,10 +412,12 @@ def fetch_channel(conn, channel_row):
                 break  # error, already logged
             if not page:
                 break  # no more new messages
-            # page is oldest-first when using 'after' (chronological)
+            # With 'after', Discord returns the OLDEST N messages after the
+            # cursor, but lists them NEWEST-FIRST within the page.
             new_messages.extend(page)
-            # Advance cursor to the newest message in this page
-            last_msg_id = page[-1]['id']
+            # Advance the cursor to the OLDEST message in this page so the
+            # next 'after' call continues forward past it.
+            last_msg_id = min((m['id'] for m in page), key=int)
             if len(page) < 100:
                 break  # last page — we're caught up
             # Otherwise keep paginating for more new messages
@@ -427,9 +432,10 @@ def fetch_channel(conn, channel_row):
     if not new_messages:
         return 0
 
-    # new_messages is oldest-first; save_messages expects newest-first.
-    # Reverse so the cursor saved is the newest message ID.
-    new_messages.reverse()
+    # Save in chronological order (oldest first) for tidy DB inserts.
+    # save_messages picks the cursor as the max message id, so ordering
+    # here no longer affects which message becomes the cursor.
+    new_messages.sort(key=lambda m: int(m['id']))
 
     saved = save_messages(conn, ch_db_id, account_id, ch_discord_id, new_messages)
     return saved
