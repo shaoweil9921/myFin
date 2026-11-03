@@ -232,9 +232,9 @@ Keys look like `agent:main:cron:<job-id>` / `agent:main:main`. Archiving keeps t
 ## fintech DB — Backup System
 - **Backup dir:** `C:\Data\postgres_backup\`
 - **Schedule:** Saturday 1:00 PM ET (backup), Monday 9:00 AM ET (monitor)
-- **Retention:** Last 4 weekly backups (auto-cleanup)
+- **Retention:** last **8** weekly `.sql.gz` files (auto-cleanup in `db_backup.py` — the old "last 4" note was wrong)
 - **Alert:** Telegram message if no backup for current week
-- **Scripts:** `backup_fintech.py`, `check_backup.py` (in `Obsidian_trading\database\`)
+- **Scripts:** `db_backup.py` (workspace root) + cron `fintech-db-backup` (backup) / `fintech-db-backup-monitor` (monitor). The previously referenced `backup_fintech.py` / `check_backup.py` in `Obsidian_trading\database\` do **not** exist.
 - **Restore:** `gunzip -c fintech_YYYY-MM-DD.sql.gz | psql -h 127.0.0.1 -p 5432 -U postgres -d fintech`
 - **pg_dump path:** `C:\Program Files\PostgreSQL\18\bin\pg_dump.exe`
 
@@ -369,6 +369,11 @@ All 6 expired Apr 10. None hit +150% target. yf prices unreliable — real fills
 - ITMC Extraction: Sun 8 PM ET (browser + image analysis)
 
 ## Follow Up / Pending
+
+### Discord coach signals at risk (updated 2026-11-02)
+- **TQQQ $62 put exp 2026-11-06** (Coach Baylor, signal 2026-10-29, $0.85 premium): TQQQ closed 2026-11-02 at $59.46, i.e. **$2.54 ITM** vs $0.85 premium -> intrinsic loss ~$169/contract (~199% of premium) if held to expiry. Not an Alpaca position (paper account has 0 positions) - coach-signal tracking only. <!-- project: github.com/shaoweil9921/myFin -->
+- **USO $150 put exp 2026-11-11** (Coach Baylor, $1.50 premium): USO $156.94 (-7.04% on 2026-11-02) still well above the strike - no action.
+- Signal rows live in `discord_trade_signal` (use `stock_ticker`, `strike_price`, `expiration_date`, `entry_premium`); latest signal_date is 2026-10-29.
 
 ## PDF Form Filler (2026-08-22)
 
@@ -753,6 +758,9 @@ Set-Service -Name RPCPerformanceService -StartupType Disabled; Stop-Service -Nam
 - **Empty-extract guard (added 2026-11-02):** `scrape_finviz.py` now returns early (exit 1) **without overwriting** `finviz_extracted_data.json` when Finviz yields 0 rows. Before this, a pre-market/empty screener response wiped the previous 20-row extract to `[]` (data loss). Finviz returns very few rows before ~10 AM ET (2026-11-02 08:00 → 1 row, ORLY), so the "Sanity-check rows per scan" rule still applies.
 - `scan` table columns are **`scan_id`** (not `id`), `scan_name`, `scan_time`, `status`, `scan_note`, `source`.
 - **Partial-scan failure mode is RECURRING (2026-10-30):** cron scan 377 (07:30 ET) again landed only 2 rows. Remedy that worked: run `force_load_finviz_data.py` (loads `finviz_extracted_data.json` → new scan_id 379 = 17 rows). The 13:05 ET re-scan is always `skipped` by the same-day dedup, so it never repairs the partial scan — you must force-load manually. Check `finviz_extracted_data.json` mtime first: if it's from ~13:05 it holds the full 17-ticker snapshot.
+- **Root cause of the "near-empty scan" (2026-11-02):** Finviz's screener is genuinely unpopulated before ~10 AM ET - not a parser/layout break. Probes: `cap_midover` = 20 rows, `+sh_relvol_o3` = 7, `+sh_curvol_o750` = 4. An 08:00 ET scrape legitimately returns 1-4 rows. The same-day dedup guard (`check_already_loaded()`) counts ANY same-day row as complete, so the 1-row pre-market scan blocks the full-session scan. Result 2026-11-02: scan 380 = 1 row (pre-market), scan 381 = 7 rows (13:04, force-loaded).
+- **Second data-loss variant (2026-11-02):** the empty-extract guard only protects against 0 rows - a *smaller* result (4 rows vs the committed 20) will still overwrite `finviz_extracted_data.json`. **Before any manual re-scrape, back up / `git checkout` the JSON.**
+- **Pending go-ahead fixes:** (a) move the Finviz GapperMid cron to after 10:00 ET so it hits a populated screener; (b) treat a same-day row count < ~20 as incomplete and auto force-reload via `force_load_finviz_data.py` instead of skipping.
 
 ### Discord Pipeline Health Check (verified 2026-10-26)
 - **Do NOT assume the Discord fetch is broken when it returns 0.** Check `discord_channel.last_fetched_at` first — if it is recent, the pipeline is healthy and there genuinely were no new posts.
