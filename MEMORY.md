@@ -370,10 +370,12 @@ All 6 expired Apr 10. None hit +150% target. yf prices unreliable — real fills
 
 ## Follow Up / Pending
 
-### Discord coach signals at risk (updated 2026-11-02)
-- **TQQQ $62 put exp 2026-11-06** (Coach Baylor, signal 2026-10-29, $0.85 premium): TQQQ closed 2026-11-02 at $59.46, i.e. **$2.54 ITM** vs $0.85 premium -> intrinsic loss ~$169/contract (~199% of premium) if held to expiry. Not an Alpaca position (paper account has 0 positions) - coach-signal tracking only. <!-- project: github.com/shaoweil9921/myFin -->
-- **USO $150 put exp 2026-11-11** (Coach Baylor, $1.50 premium): USO $156.94 (-7.04% on 2026-11-02) still well above the strike - no action.
-- Signal rows live in `discord_trade_signal` (use `stock_ticker`, `strike_price`, `expiration_date`, `entry_premium`); latest signal_date is 2026-10-29.
+### Discord coach signals at risk (updated 2026-11-03)
+- **TQQQ $62 put exp 2026-11-06** (Coach Baylor, signal 2026-10-29, $0.85 premium): TQQQ closed 2026-11-03 at $60.55 (+1.83%), i.e. **$1.45 ITM** vs $0.85 premium -> intrinsic loss ~$145/contract (~171% of premium) if held to Friday expiry. Not an Alpaca position (paper account has 0 positions) - coach-signal tracking only. <!-- project: github.com/shaoweil9921/myFin -->
+- **AVGO $340 call exp 2026-11-06** (TradingWithAshley, signal 2026-11-02, $4.20 premium): AVGO closed 2026-11-03 at $332.13, ~2.3% below strike - OTM at expiry. <!-- project: github.com/shaoweil9921/myFin -->
+- **USO $150 put exp 2026-11-11** (Coach Baylor, $1.50 premium): USO $158.17 on 2026-11-03, still well above the strike - no action. <!-- project: github.com/shaoweil9921/myFin -->
+- **New 2026-11-03 CSPs (Coach Steve, ids 622-623):** CELH $26 put exp 2026-11-20 $0.78 (weekly MACD bullish crossover, IV elevated into Thursday 2026-11-05 earnings, strike below lower BB; CELH closed $29.98) and SOFI $15 put exp 2026-11-20 $0.24 (SOFI closed $16.77). Both well above strike. <!-- project: github.com/shaoweil9921/myFin -->
+- Signal rows live in `discord_trade_signal` (use `stock_ticker`, `strike_price`, `expiration_date`, `entry_premium`); 134 rows, latest signal_date is 2026-11-03. <!-- project: github.com/shaoweil9921/myFin -->
 
 ## PDF Form Filler (2026-08-22)
 
@@ -557,7 +559,7 @@ python generate_daily_signals.py                    # today (default)
 - **Condo sale**: HOA approval still pending since Jul 30 (~9+ weeks). Likely stalled.
 - **update_stock_data_check.py**: EXISTS and WORKING — checks if stock data already loaded today and skips if so. Mon-Fri market hours.
 - **⛔ OpenClaw CRON BROKEN (Windows):** DataCloneError on all isolated-session jobs. `command` payloads use `sh -lc` (doesn't exist on Windows). 14+ jobs affected. Issue: #161272.
-- **Memory maintenance**: last done 2026-10-03 ✓
+- **Memory maintenance**: last done 2026-11-03 ✓
 
 
 ## Jarsy Extraction (2026-04-06, updated 2026-10-11)
@@ -901,8 +903,9 @@ Set-Service -Name RPCPerformanceService -StartupType Disabled; Stop-Service -Nam
 - `/update` and `gateway(action="update.run")` **cannot pin a version** — they resolve `update.channel` -> registry target -> `latest`
 - `update.run` RPC has NO `tag`/`version`/`spec` param; its `target` field is **Git-sha only** (`kind: "git"`, `sha`)
 - Only the CLI's `--tag` can pin: `openclaw update --tag 2026.10.5 --yes`
-- No update channel maps to a Node-24.19.0-compatible build: `stable`=2026.10.9 (needs 24.22.1), `extended-stable`=2026.9.36 (needs 24.22.1), `beta`=2026.10.10-beta.4 (needs 24.22.1)
-- `2026.10.10-beta.5` is Node-compatible (`>=24.16.0`) but is a moving target
+- **UPDATE 2026-11-03:** the Node blocker is GONE for the current `latest`. npm dist-tags now: `latest`=**2026.10.10**, `beta`=2026.10.10, `extended-stable`=2026.9.36. `npm view openclaw@2026.10.10 engines` -> `node >=24.16.0 <25 || >=26.1.0` -> **compatible with installed Node 24.19.0**. So `latest` is installable now; only `stable`/`extended-stable` (2026.10.9 / 2026.9.36) still need Node >=24.22.1.
+- Prior update failures were `global-install-failed` with npm preinstall "requires Node >=24.22.1 <25 || >=26.12.1" -> they targeted 2026.10.9 / 2026.9.36, not 2026.10.10.
+- Still owner-only: run `openclaw update --yes` (or `--tag 2026.10.10 --yes`) from a **standalone Windows Terminal**, never from the Gateway process tree. Back up `openclaw.sqlite` / automations first (a 2026-10-15 restart wiped all cron jobs).
 
 ### AGENT EXEC SHELL CANNOT SWAP THE PACKAGE (2026-11-01)
 - Running `openclaw update` from the agent's exec shell fails at `managed-service-preflight` with code `inside-gateway-process-tree`
@@ -1047,7 +1050,7 @@ To run the same analysis next week:
 - Each vault: own .git, own remote, own GitHub repo
 
 ## OpenClaw Version
-- **Installed (verified 2026-11-02 via `npm ls -g openclaw`): 2026.10.5** (the older 2026.9.9 note here was stale — corrected). npm latest = **2026.10.9**. Upgrade is **blocked on Node**: every channel (stable 2026.10.9, extended-stable 2026.9.36, beta 2026.10.10-beta.4) requires Node >= 24.22.1; host has Node 24.19.0. Owner action: upgrade Node first, then `npm i -g openclaw@latest --no-fund --no-audit`.
+- **Installed (verified 2026-11-03 via `npm ls -g openclaw`): 2026.10.5**. npm `latest` = **2026.10.10** (engines `>=24.16.0`, compatible with host Node 24.19.0 -> upgrade is no longer Node-blocked). `stable`/`extended-stable` (2026.10.9 / 2026.9.36) still require Node >= 24.22.1. Owner action: run `openclaw update --yes` from a standalone Windows Terminal (outside the Gateway process tree), backing up automations first.
 - Gateway WS URL: `ws://localhost:18789` — use `localhost` NOT `127.0.0.1` (gateway listens on IPv6 only)
 - Config: `C:\Users\shaowei_l\.openclaw\openclaw.json`
 - Workspace: `C:\Users\shaowei_l\.openclaw\workspace`
