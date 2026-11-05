@@ -1,0 +1,8 @@
+{
+  "last_checked": "2026-11-05T08:05:00.000000",
+  "last_checked_version": "2026.11.1",
+  "last_alerted_version": "2026.11.1",
+  "installed_version": "2026.10.5",
+  "installed_version_corrected_at": "2026-11-02T08:05:00.000000",
+  "note": "npm latest = 2026.11.1 (was 2026.10.10). engines node >=24.16.0 <25 || >=26.1.0 -> compatible with installed Node 24.19.0. Installed is still 2026.10.5. Upgrade is owner-only: run `openclaw update --yes` from a standalone Windows Terminal (gateway process tree refuses, exit 75). Back up openclaw.sqlite + automations first."
+}

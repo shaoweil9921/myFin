@@ -915,6 +915,7 @@ Set-Service -Name RPCPerformanceService -StartupType Disabled; Stop-Service -Nam
 - `/update` and `gateway(action="update.run")` **cannot pin a version** — they resolve `update.channel` -> registry target -> `latest`
 - `update.run` RPC has NO `tag`/`version`/`spec` param; its `target` field is **Git-sha only** (`kind: "git"`, `sha`)
 - Only the CLI's `--tag` can pin: `openclaw update --tag 2026.10.5 --yes`
+- **UPDATE 2026-11-05:** npm `latest` is now **2026.11.1** (was 2026.10.10). `npm view openclaw@2026.11.1 engines` -> `node >=24.16.0 <25 || >=26.1.0` -> **still compatible with installed Node 24.19.0**. No Node blocker. `stable`/`extended-stable` (2026.10.9 / 2026.9.36) still need Node >=24.22.1.
 - **UPDATE 2026-11-03:** the Node blocker is GONE for the current `latest`. npm dist-tags now: `latest`=**2026.10.10**, `beta`=2026.10.10, `extended-stable`=2026.9.36. `npm view openclaw@2026.10.10 engines` -> `node >=24.16.0 <25 || >=26.1.0` -> **compatible with installed Node 24.19.0**. So `latest` is installable now; only `stable`/`extended-stable` (2026.10.9 / 2026.9.36) still need Node >=24.22.1.
 - Prior update failures were `global-install-failed` with npm preinstall "requires Node >=24.22.1 <25 || >=26.12.1" -> they targeted 2026.10.9 / 2026.9.36, not 2026.10.10.
 - Still owner-only: run `openclaw update --yes` (or `--tag 2026.10.10 --yes`) from a **standalone Windows Terminal**, never from the Gateway process tree. Back up `openclaw.sqlite` / automations first (a 2026-10-15 restart wiped all cron jobs).
@@ -1062,7 +1063,7 @@ To run the same analysis next week:
 - Each vault: own .git, own remote, own GitHub repo
 
 ## OpenClaw Version
-- **Installed (verified 2026-11-03 via `npm ls -g openclaw`): 2026.10.5**. npm `latest` = **2026.10.10** (engines `>=24.16.0`, compatible with host Node 24.19.0 -> upgrade is no longer Node-blocked). `stable`/`extended-stable` (2026.10.9 / 2026.9.36) still require Node >= 24.22.1. Owner action: run `openclaw update --yes` from a standalone Windows Terminal (outside the Gateway process tree), backing up automations first.
+- **Installed (verified 2026-11-05 via `npm ls -g openclaw`): 2026.10.5**. npm `latest` = **2026.11.1** (engines `>=24.16.0`, compatible with host Node 24.19.0 -> upgrade is no longer Node-blocked). `stable`/`extended-stable` (2026.10.9 / 2026.9.36) still require Node >= 24.22.1. Owner action: run `openclaw update --yes` from a standalone Windows Terminal (outside the Gateway process tree), backing up automations first.
 - Gateway WS URL: `ws://localhost:18789` — use `localhost` NOT `127.0.0.1` (gateway listens on IPv6 only)
 - Config: `C:\Users\shaowei_l\.openclaw\openclaw.json`
 - Workspace: `C:\Users\shaowei_l\.openclaw\workspace`
