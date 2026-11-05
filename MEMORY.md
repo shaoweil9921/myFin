@@ -269,6 +269,18 @@ Keys look like `agent:main:cron:<job-id>` / `agent:main:main`. Archiving keeps t
 ### Scripts
 - `stock_app.py` - Streamlit stock chart app
 - `update_stock_data.py` - Incremental data fetcher
+- `hb_quotes.py` - Regular-session watchlist quotes (compares the last two DAILY closes -> in pre-market it re-reports the PRIOR session's move).
+- **`hb_premarket_quotes.py` (added 2026-11-04)** - pre-market / extended-hours quotes for the whole watchlist in one call: CNBC `ExtendedMktQuote` (pre/post price + % vs prior close + session label), Yahoo chart 5m `includePrePost=true` (fallback + cross-check), CBOE delayed-quote JSON for ^VIX (authoritative). Run: `python hb_premarket_quotes.py [TICKER ...]`. Use this for the 07:30 ET / pre-market heartbeat slot and for overnight-gap checks. <!-- project: github.com/shaoweil9921/myFin -->
+- **Known bug (2026-11-04):** the `Morning Heartbeat - 7:30AM ET` cron uses `hb_quotes.py` daily-close comparison, so pre-market it reports YESTERDAY's >5% move as "today's alert" (e.g. it sent "ORCL +5.85%" on 2026-11-04 for a 2026-11-03 move already alerted the prior day). Fix pending go-ahead: make the morning slot pre-market-aware and only alert on moves not already reported. <!-- project: github.com/shaoweil9921/myFin -->
+
+### Quote source hierarchy (settled 2026-11-04)
+- **Use CNBC** `restQuote` (regular session) / `ExtendedMktQuote` (pre/post) as the primary feed; Yahoo chart v8 as secondary/cross-check; CBOE delayed-quote JSON (`cdn.cboe.com/api/global/delayed_quotes/quotes/_VIX.json`) as the authoritative ^VIX source. <!-- project: github.com/shaoweil9921/myFin -->
+- **stooq.com is DEAD** as of 2026-11-04 — `/q/l/` and `/q/d/l/` return 404 / an HTML challenge page. It was never a workspace script, only an ad-hoc cross-check. Do not use it. <!-- project: github.com/shaoweil9921/myFin -->
+- **Never feed Yahoo `includePrePost=true` into `stock_technical`** — it mixes extended-hours prints into the daily OHLC and corrupts the close series. <!-- project: github.com/shaoweil9921/myFin -->
+- **`psql` is not on PATH on this host** — verify DB queries with psycopg2 against `fintech` at 127.0.0.1:5432. <!-- project: github.com/shaoweil9921/myFin -->
+
+### Telegram send format
+- The `message` tool requires a **channel-prefixed target**: `target="telegram:7923250382"`. A bare chat id fails with "Explicit message target required". Do not send probe/test messages to the user's chat — validate the target string first, then send once. Deleting a sent message needs both `target="telegram:<chatId>"` and a **string** `messageId` in the same call. <!-- project: github.com/shaoweil9921/myFin -->
 
 ---
 
