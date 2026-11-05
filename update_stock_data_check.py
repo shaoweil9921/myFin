@@ -17,6 +17,7 @@ import winreg
 WORKSPACE = r'C:\Users\shaowei_l\.openclaw\workspace'
 SCRAPE_SCRIPT = os.path.join(WORKSPACE, 'scrape_finviz.py')
 LOAD_SCRIPT = os.path.join(WORKSPACE, 'load_finviz_data.py')
+FORCE_LOAD_SCRIPT = os.path.join(WORKSPACE, 'force_load_finviz_data.py')
 
 
 def get_db_pw():
@@ -84,8 +85,11 @@ def is_market_closed_today():
         return False, f"DB error: {e}"
 
 
-def check_already_loaded():
-    """Check if GapperMid data already loaded today"""
+MIN_ROWS = 5  # a healthy intraday GapperMid pull returns ~20 rows
+
+
+def count_loaded_today():
+    """Return number of GapperMid result rows already loaded today (0 on error)."""
     try:
         conn = psycopg2.connect(**DB_KWARGS)
         conn.autocommit = True
@@ -98,10 +102,20 @@ def check_already_loaded():
         cnt = cur.fetchone()[0]
         cur.close()
         conn.close()
-        return cnt > 0
+        return cnt
     except Exception as e:
         print(f"DB check already-loaded failed: {e}")
-        return False
+        return 0
+
+
+def check_already_loaded():
+    """True only if today's load looks complete (not a partial pre-market snapshot)."""
+    cnt = count_loaded_today()
+    if cnt >= MIN_ROWS:
+        return True
+    if cnt > 0:
+        print(f"Partial load detected today ({cnt} row(s) < {MIN_ROWS}) - will refresh")
+    return False
 
 
 def run_step(script_path, step_name):
@@ -167,10 +181,16 @@ def main():
         print("Scrape failed - aborting")
         sys.exit(1)
     
-    # Step 2: Load
-    if not run_step(LOAD_SCRIPT, "Load to DB"):
-        print("Load failed - aborting")
-        sys.exit(1)
+    # Step 2: Load (force-load if a partial same-day load already exists)
+    existing = count_loaded_today()
+    if existing > 0:
+        if not run_step(FORCE_LOAD_SCRIPT, "Load to DB (forced full load)"):
+            print("Load failed - aborting")
+            sys.exit(1)
+    else:
+        if not run_step(LOAD_SCRIPT, "Load to DB"):
+            print("Load failed - aborting")
+            sys.exit(1)
     
     print("\n=== PIPELINE COMPLETE ===")
 
