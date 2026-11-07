@@ -407,13 +407,11 @@ All 6 expired Apr 10. None hit +150% target. yf prices unreliable — real fills
 
 ## Follow Up / Pending
 
-### Discord coach signals at risk (updated 2026-11-03)
-- **TQQQ $62 put exp 2026-11-06** (Coach Baylor, signal 2026-10-29, $0.85 premium): TQQQ closed 2026-11-03 at $60.55 (+1.83%), i.e. **$1.45 ITM** vs $0.85 premium -> intrinsic loss ~$145/contract (~171% of premium) if held to Friday expiry. Not an Alpaca position (paper account has 0 positions) - coach-signal tracking only. <!-- project: github.com/shaoweil9921/myFin -->
-- **AVGO $340 call exp 2026-11-06** (TradingWithAshley, signal 2026-11-02, $4.20 premium): AVGO closed 2026-11-03 at $332.13, ~2.3% below strike - OTM at expiry. <!-- project: github.com/shaoweil9921/myFin -->
-- **USO $150 put exp 2026-11-11** (Coach Baylor, $1.50 premium): USO $158.17 on 2026-11-03, still well above the strike - no action. <!-- project: github.com/shaoweil9921/myFin -->
-- **New 2026-11-03 CSPs (Coach Steve, ids 622-623):** CELH $26 put exp 2026-11-20 $0.78 (weekly MACD bullish crossover, IV elevated into Thursday 2026-11-05 earnings, strike below lower BB; CELH closed $29.98) and SOFI $15 put exp 2026-11-20 $0.24 (SOFI closed $16.77). Both well above strike. <!-- project: github.com/shaoweil9921/myFin -->
-- Signal rows live in `discord_trade_signal` (use `stock_ticker`, `strike_price`, `expiration_date`, `entry_premium`); 134 rows, latest signal_date is 2026-11-03. <!-- project: github.com/shaoweil9921/myFin -->
-
+### Discord coach signals at risk (updated 2026-11-06)
+- **All 12 signals expiring 2026-11-06 closed OTM** (CONL $5P, UNG $9P, OSCR $27.50P, RKLB $48P, TNA $50P, TQQQ $62P, TNA $68C, USO $150P, NBIS $200P, AMZN $277.50C, AVGO $340C, AMAT $375P). Tightest at the close was **UNG $9 PUT** (UNG 9.35) - it was ~4.4% ITM intraday before the AI rebound pushed it back; **TQQQ $62 PUT** flipped from ~$9.68 ITM pre-market to comfortable OTM at 52.25. None are held in the Alpaca paper account (0 positions all day). <!-- project: github.com/shaoweil9921/myFin -->
+- **Next expiry cluster:** **2026-11-11 USO $150 PUT (Baylor)** - USO 148.41, ~$1.59 ITM, closest near-term item. **2026-11-16 NVDA $177.50 CSP (Tim)** - NVDA 186.64, ~$9.14 cushion. Then 11-20: TNA $66C, TQQQ $76C, SAIL $17.50P, SOFI $15P, AMD $370P (Cliff), CELH $26P. 12-18 block: SMCI $28P, TQQQ $63P, MU $780P, WDC $300P, BE $200P (Ashley). <!-- project: github.com/shaoweil9921/myFin -->
+- **Oversold watchlist after the 2026-11-06 close:** GOOG RSI 30.0, NVDA 30.8, PLTR 31.2, MU 31.3 - all still at/below the 200-day, BEARISH/HOLD. Watch for a second leg down if the AI bounce fails. <!-- project: github.com/shaoweil9921/myFin -->
+- Signal rows live in `discord_trade_signal` (use `stock_ticker`, `strike_price`, `expiration_date`, `entry_premium`); **143 rows**, latest signal_date is **2026-11-05**. Newest batch (ids 626-632, 2026-11-05) = Ashley AMD $400 LEAPS + TQQQ $50 SKIP, Tim NVDA $177.50 CSP + LLY $1260 LEAP + QQQ $630 LEAP, Steve QQQ $650 SKIP, Cliff AMD $370 CSP. <!-- project: github.com/shaoweil9921/myFin -->
 ## PDF Form Filler (2026-08-22)
 
 ### Script: `pdf_make_fillable.py`
