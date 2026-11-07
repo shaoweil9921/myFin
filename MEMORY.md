@@ -304,6 +304,11 @@ Keys look like `agent:main:cron:<job-id>` / `agent:main:main`. Archiving keeps t
 - The **Letter Position Tracker - Daily EOD** job (id `fc414b43`, 16:30 ET) failed with `System event queue is full (20 pending). Let the session process pending events before retrying the notification.` — the script **never ran**; the failure is in the runtime's event delivery, not the script. <!-- project: github.com/shaoweil9921/myFin -->
 - This hits jobs configured with `sessionTarget: main` + `payload.kind: systemEvent` when the main session's pending-event queue backs up. **Fix:** run the script manually, or convert the job to `sessionTarget: isolated` + `payload.kind: agentTurn`. <!-- project: github.com/shaoweil9921/myFin -->
 
+### Alpaca heartbeat timeouts = check the status page FIRST (confirmed 2026-11-07)
+- Alpaca runs **scheduled maintenance on the Paper & Sandbox Broker API every Saturday 07:00–09:00 ET**. During the window `/v2/account` → 504, `/v2/positions` → read timeout, `/v2/orders` → 500, while `/v2/clock` still returns 401 (auth path alive). That looks exactly like a broken script but is not. <!-- project: github.com/shaoweil9921/myFin -->
+- Check `https://status.alpaca.markets/api/v2/scheduled-maintenances/active.json` and `.../components.json` before debugging. Status page endpoints work without auth and Yahoo/GitHub reachability can be used to rule out a local network problem. <!-- project: github.com/shaoweil9921/myFin -->
+- **Recommended hardening:** add a status-page guard to `heartbeat_alpaca_check.py` so it prints `SKIP — Alpaca in maintenance` instead of raising a traceback. Still awaiting owner go-ahead. <!-- project: github.com/shaoweil9921/myFin -->
+
 ### Telegram send format
 - The `message` tool requires a **channel-prefixed target**: `target="telegram:7923250382"`. A bare chat id fails with "Explicit message target required". Do not send probe/test messages to the user's chat — validate the target string first, then send once. Deleting a sent message needs both `target="telegram:<chatId>"` and a **string** `messageId` in the same call. <!-- project: github.com/shaoweil9921/myFin -->
 
@@ -411,7 +416,7 @@ All 6 expired Apr 10. None hit +150% target. yf prices unreliable — real fills
 - **All 12 signals expiring 2026-11-06 closed OTM** (CONL $5P, UNG $9P, OSCR $27.50P, RKLB $48P, TNA $50P, TQQQ $62P, TNA $68C, USO $150P, NBIS $200P, AMZN $277.50C, AVGO $340C, AMAT $375P). Tightest at the close was **UNG $9 PUT** (UNG 9.35) - it was ~4.4% ITM intraday before the AI rebound pushed it back; **TQQQ $62 PUT** flipped from ~$9.68 ITM pre-market to comfortable OTM at 52.25. None are held in the Alpaca paper account (0 positions all day). <!-- project: github.com/shaoweil9921/myFin -->
 - **Next expiry cluster:** **2026-11-11 USO $150 PUT (Baylor)** - USO 148.41, ~$1.59 ITM, closest near-term item. **2026-11-16 NVDA $177.50 CSP (Tim)** - NVDA 186.64, ~$9.14 cushion. Then 11-20: TNA $66C, TQQQ $76C, SAIL $17.50P, SOFI $15P, AMD $370P (Cliff), CELH $26P. 12-18 block: SMCI $28P, TQQQ $63P, MU $780P, WDC $300P, BE $200P (Ashley). <!-- project: github.com/shaoweil9921/myFin -->
 - **Oversold watchlist after the 2026-11-06 close:** GOOG RSI 30.0, NVDA 30.8, PLTR 31.2, MU 31.3 - all still at/below the 200-day, BEARISH/HOLD. Watch for a second leg down if the AI bounce fails. <!-- project: github.com/shaoweil9921/myFin -->
-- Signal rows live in `discord_trade_signal` (use `stock_ticker`, `strike_price`, `expiration_date`, `entry_premium`); **143 rows**, latest signal_date is **2026-11-05**. Newest batch (ids 626-632, 2026-11-05) = Ashley AMD $400 LEAPS + TQQQ $50 SKIP, Tim NVDA $177.50 CSP + LLY $1260 LEAP + QQQ $630 LEAP, Steve QQQ $650 SKIP, Cliff AMD $370 CSP. <!-- project: github.com/shaoweil9921/myFin -->
+- Signal rows live in `discord_trade_signal` (use `stock_ticker`, `strike_price`, `expiration_date`, `entry_premium`); **145 rows**, latest signal_date is **2026-11-06**. Newest batch (ids 633-634, 2026-11-06) = Baylor TQQQ $39 PUT Wheel CSP exp 12/18/2026 $1.90, Tim GOOGL $280 CALL Bull Call Debit Spread exp 01/15/2027 $16.88. <!-- project: github.com/shaoweil9921/myFin -->
 ## PDF Form Filler (2026-08-22)
 
 ### Script: `pdf_make_fillable.py`
@@ -681,11 +686,10 @@ python generate_daily_signals.py                    # today (default)
 - **Options Trading Level:** 3 (approved)
 - **Buying Power:** $200,000 (paper)
 
-### ⚠️ Positions Data Stale (last checked Apr 2026)
-- All Apr 2026 positions are long expired/closed
-- Positions check in heartbeat is DISABLED — credentials not in env vars during heartbeat runs
-- heartbeat-state.json lastChecks.alpaca = 1785422400 (Apr 26, 2026) — very stale
-- Needs: verify credentials in environment variables and resume position tracking
+### Position tracking status (updated 2026-11-07)
+- Credentials now resolve via Windows user env vars (`ALPACA_API_KEY`, `ALPACA_API_SECRET`, `ALPACA_BASE_URL`) — the Apr 2026 "credentials not in env vars" problem is fixed. `heartbeat_alpaca_check.py` works and reads from `winreg` if the env var is missing.
+- Last confirmed read 2026-11-06 16:05 ET: **0 positions, equity $100,511.88, buying power $402,047.52, ALERTS: []**. <!-- project: github.com/shaoweil9921/myFin -->
+- Known gotcha: weekend maintenance windows (Sat 07:00–09:00 ET) make the check time out — see the Alpaca status-page note in the Cron section. <!-- project: github.com/shaoweil9921/myFin -->
 
 ---
 
