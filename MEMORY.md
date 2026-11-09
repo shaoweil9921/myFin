@@ -1091,7 +1091,7 @@ To run the same analysis next week:
 - Each vault: own .git, own remote, own GitHub repo
 
 ## OpenClaw Version
-- **Installed (re-verified 2026-11-06 via `openclaw --version`): 2026.10.5**. npm `latest` = **2026.11.1** (unchanged for 3+ days; upgrade still pending as an owner action). (engines `>=24.16.0`, compatible with host Node 24.19.0 -> upgrade is no longer Node-blocked). `stable`/`extended-stable` (2026.10.9 / 2026.9.36) still require Node >= 24.22.1. Owner action: run `openclaw update --yes` from a standalone Windows Terminal (outside the Gateway process tree), backing up automations first.
+- **Installed (re-verified 2026-11-08 via `openclaw --version`): 2026.10.5**. npm `latest` = **2026.11.2** (moved 2026-11-08; upgrade still pending as an owner action). (engines `>=24.16.0`, compatible with host Node 24.19.0 -> upgrade is no longer Node-blocked). `stable`/`extended-stable` (2026.10.9 / 2026.9.36) still require Node >= 24.22.1. Owner action: run `openclaw update --yes` from a standalone Windows Terminal (outside the Gateway process tree), backing up automations first.
 - Gateway WS URL: `ws://localhost:18789` â€” use `localhost` NOT `127.0.0.1` (gateway listens on IPv6 only)
 - Config: `C:\Users\shaowei_l\.openclaw\openclaw.json`
 - Workspace: `C:\Users\shaowei_l\.openclaw\workspace`
@@ -1160,3 +1160,31 @@ docker compose -f C:\QuantDinger\docker-compose.yml up -d
 - 5000: Backend API
 - 5433: QuantDinger postgres (maps to 5432 inside container, avoids fintech DB on 5432)
 - 6379: Redis
+
+### ITMC Letter Extraction cron wedged on 2026-11-08 - 3rd job on the systemEvent+main pattern
+- The **ITMC Letter Extraction** cron (c125cd06, Sun 20:00 ET) fired at 20:00 on 2026-11-08 but sat at status=running for 7+ minutes with **no run record ever written**, and its target session gent:main:main had not taken a turn since 2026-11-06. Same root cause as c414b43 / 3a3fcfed: **payload.kind: systemEvent + sessionTarget: main**, whose in-memory event queue (cap 20) only drains when a turn runs on that exact session key. <!-- project: github.com/shaoweil9921/myFin -->
+- **That makes 3 jobs** on this pattern: c125cd06 (ITMC), c414b43 (Letter Tracker), 3a3fcfed (Ashley Discord Daily). The systemEvent -> command+isolated conversion fix should cover all three. <!-- project: github.com/shaoweil9921/myFin -->
+- **A wedged systemEvent job leaves NO error in cron runs** - it just never records a run. Detect it by openclaw cron list showing unning long past the expected duration. <!-- project: github.com/shaoweil9921/myFin -->
+- ITMC's payload is a systemEvent whose text points at docs/itmc_extraction_runbook.md, so it cannot be converted to kind: command the way the Discord/Letter jobs can - it needs the browser+OCR half done by an agent turn. Fix for this one is to change the **target session** rather than the payload kind. <!-- project: github.com/shaoweil9921/myFin -->
+- Manual recovery worked end to end: rowser profile openclaw -> Schaeffer's login -> message center -> newest "In The Money Countdown" / "New Recommendation" row -> letter page -> **table is an image, not text**. For 2026-11-08 the table was Chart_33079_37705_76922__20261107015657105.jpg (894x347); the other 6 bulletin images are per-trade charts. <!-- project: github.com/shaoweil9921/myFin -->
+- **Double-pass read via a 3x LANCZOS upscale works well**: both passes agreed exactly on all 6 rows (strike, ask price, OEZ). Saves to DB with itmc_extract.py -> letter_id=9, elease_id=23, release status pending -> extracted. <!-- project: github.com/shaoweil9921/myFin -->
+
+### ITMC 2026-11-08 positions (exp Fri 2026-11-13)
+| Ticker | Type | Strike | Ask | Target | OEZ |
+|--------|------|--------|-----|--------|-----|
+| DOCU | CALL |  | .15 | 150% | 76.00-79.00 |
+| FISV | PUT |  | .00 | 150% | 62.00-65.00 |
+| OKTA | CALL | .50 | .25 | 150% | 168.00-170.00 |
+| PLTR | CALL |  | .00 | 150% | 159.00-162.00 |
+| SG | CALL | .50 | .70 | 150% | 11.00-13.00 |
+| TJX | PUT |  | .50 | 150% | 133.00-137.00 |
+- Ask prices as of Fri 2026-11-06 close. Entries should be taken Mon 2026-11-09, and only while the underlying is inside its OEZ. <!-- project: github.com/shaoweil9921/myFin -->
+
+### Cron: ALL systemEvent+main jobs converted 2026-11-08 - the pattern is now banned
+- **Zero enabled jobs remain on `payload.kind: systemEvent` + `sessionTarget: main`.** Converted on 2026-11-08: Letter Tracker c414b43 -> command+isolated, Ashley Discord Daily 3a3fcfed -> command+isolated, fintech-db-backup 46f8450f -> command+isolated, fintech-db-backup-monitor 4c124fed -> agentTurn+isolated, ITMC -> agentTurn+isolated (new id 4abcd3c1-b9e6-4b3d-af45-efe1421e018d). Only heartbeat-main stays on main (that is the heartbeat lane, not a queue enqueue). <!-- project: github.com/shaoweil9921/myFin -->
+- **The "wedged" variant - status: running forever with NO run record:** a systemEvent+main job whose enqueue never resolves leaves state.runningAtMs set and produces nothing in cron_run_receipts and no error. openclaw cron run returns {"ran": false, "reason": "already-running"}. <!-- project: github.com/shaoweil9921/myFin -->
+- **cron.update does NOT clear it** - the marker is in the gateway's in-memory reservation. The scheduler only clears a unningAtMs older than **2 hours** (Math.abs(nowMs - runningAt) > 72e5). Immediate fix: openclaw cron rm <id> (returns ctiveRunCancellationRequested: true) then openclaw cron add under a **NEW id**. cron add refuses without --agent main. <!-- project: github.com/shaoweil9921/myFin -->
+- **The verb is openclaw cron edit, not update.** But --command-argv is unusable on Windows (PowerShell mangles the JSON), so patch via openclaw gateway call cron.update --params '{"jobId":…,"patch":{…}}', driven from Python because PowerShell mangles that argument too. Helpers: **_cron_patch.py** (apply a patch JSON file) and **_cron_inspect.py** (dump job.state + cron_run_receipts from the state sqlite). <!-- project: github.com/shaoweil9921/myFin -->
+- **Verify conversions by running them for real:** openclaw cron run <id> --wait on all 4 converted jobs returned status: ok / exitCode: 0 AND produced their artifacts (backup .sql.gz, Obsidian signals file, letter tracker output). <!-- project: github.com/shaoweil9921/myFin -->
+- **fintech DB backups live in C:\Data\postgres_backup\** (db_backup.py BACKUP_DIR) - NOT in the workspace. Retention = last 8 files, so more than one dump per week wastes a slot; the 11-08 extra was deleted. <!-- project: github.com/shaoweil9921/myFin -->
+- **New authoritative registry: docs/cron_job_registry.md** (jobs, patterns, IDs, changes). The stale table in the cron-job-management skill was updated to match. <!-- project: github.com/shaoweil9921/myFin -->

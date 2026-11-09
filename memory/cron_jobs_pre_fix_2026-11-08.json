@@ -1,0 +1,166 @@
+﻿[
+    {
+        "id":  "c125cd06-97d9-4685-9d41-4891c2fd6916",
+        "owner":  {
+                      "agentId":  "main",
+                      "sessionKey":  "agent:main:main",
+                      "accountId":  "default"
+                  },
+        "agentId":  "main",
+        "sessionKey":  "agent:main:main",
+        "name":  "ITMC Letter Extraction",
+        "enabled":  true,
+        "createdAtMs":  1791296647079,
+        "schedule":  {
+                         "kind":  "cron",
+                         "expr":  "0 20 * * 0",
+                         "tz":  "America/New_York"
+                     },
+        "sessionTarget":  "main",
+        "wakeMode":  "now",
+        "payload":  {
+                        "kind":  "systemEvent",
+                        "text":  "Schaeffer\u0027s ITMC Letter Extraction - READ AND FOLLOW THE RUNBOOK AT C:\\Users\\shaowei_l\\.openclaw\\workspace\\docs\\itmc_extraction_runbook.md (it has the full browser login, image extraction, double-pass verification, DB save, and verification steps; the earlier payload called a script that did not exist)."
+                    },
+        "state":  {
+                      "nextRunAtMs":  1794186000000,
+                      "lastRunAtMs":  1793588426044,
+                      "lastRunStatus":  "ok",
+                      "lastStatus":  "ok",
+                      "lastDurationMs":  338,
+                      "lastDeliveryStatus":  "not-requested",
+                      "lastFailureNotificationDeliveryStatus":  "not-requested",
+                      "consecutiveErrors":  0,
+                      "consecutiveSkipped":  0,
+                      "runningAtMs":  1794186000034
+                  },
+        "updatedAtMs":  1793588426382,
+        "configRevision":  "sha256:LpPf5d653_kLfxMy3mC8SQK7lRd6LMjN8uvZp562M1E",
+        "nextRunAtMs":  1794186000000,
+        "lastRunAtMs":  1793588426044,
+        "lastRunStatus":  "ok",
+        "lastDeliveryStatus":  "not-requested",
+        "lastFailureNotificationDeliveryStatus":  "not-requested",
+        "effectiveAgentId":  "main",
+        "status":  "running"
+    },
+    {
+        "id":  "fc414b43-3514-4562-9759-306b8f05de47",
+        "owner":  {
+                      "agentId":  "main",
+                      "sessionKey":  "agent:main:main",
+                      "accountId":  "default"
+                  },
+        "agentId":  "main",
+        "sessionKey":  "agent:main:main",
+        "name":  "Letter Position Tracker - Daily EOD",
+        "enabled":  true,
+        "createdAtMs":  1791296622261,
+        "schedule":  {
+                         "kind":  "cron",
+                         "expr":  "30 16 * * 1-5",
+                         "tz":  "America/New_York"
+                     },
+        "sessionTarget":  "main",
+        "wakeMode":  "now",
+        "payload":  {
+                        "kind":  "systemEvent",
+                        "text":  "Run letter position tracker: python C:\\Users\\shaowei_l\\.openclaw\\workspace\\letter_position_tracker.py"
+                    },
+        "delivery":  {
+                         "mode":  "none"
+                     },
+        "state":  {
+                      "nextRunAtMs":  1794259800000,
+                      "lastRunAtMs":  1794000600103,
+                      "lastRunStatus":  "error",
+                      "lastStatus":  "error",
+                      "lastDurationMs":  84,
+                      "lastDeliveryStatus":  "not-requested",
+                      "lastFailureNotificationDeliveryStatus":  "not-requested",
+                      "consecutiveErrors":  1,
+                      "consecutiveSkipped":  0,
+                      "lastError":  "System event queue is full (20 pending). Let the session process pending events before retrying the notification.",
+                      "lastDiagnostics":  {
+                                              "summary":  "System event queue is full (20 pending). Let the session process pending events before retrying the notification.",
+                                              "entries":  [
+                                                              {
+                                                                  "ts":  1794000600187,
+                                                                  "source":  "cron-setup",
+                                                                  "severity":  "error",
+                                                                  "message":  "System event queue is full (20 pending). Let the session process pending events before retrying the notification."
+                                                              }
+                                                          ]
+                                          },
+                      "lastDiagnosticSummary":  "System event queue is full (20 pending). Let the session process pending events before retrying the notification."
+                  },
+        "updatedAtMs":  1794000600187,
+        "configRevision":  "sha256:iCBGN-rLJri26TDb6ZQCKv5exvmY0yfqAnNwtJkqay8",
+        "nextRunAtMs":  1794259800000,
+        "lastRunAtMs":  1794000600103,
+        "lastRunStatus":  "error",
+        "lastRunError":  "System event queue is full (20 pending). Let the session process pending events before retrying the notification.",
+        "lastDeliveryStatus":  "not-requested",
+        "lastFailureNotificationDeliveryStatus":  "not-requested",
+        "effectiveAgentId":  "main",
+        "status":  "error"
+    },
+    {
+        "id":  "3a3fcfed-09c1-41e8-9e91-ea918be5e367",
+        "owner":  {
+                      "agentId":  "main",
+                      "sessionKey":  "agent:main:main",
+                      "accountId":  "default"
+                  },
+        "agentId":  "main",
+        "sessionKey":  "agent:main:main",
+        "name":  "Ashley Discord - Daily Signals File Generator",
+        "enabled":  true,
+        "createdAtMs":  1791296637137,
+        "schedule":  {
+                         "kind":  "cron",
+                         "expr":  "0 23 * * 1-5",
+                         "tz":  "America/New_York"
+                     },
+        "sessionTarget":  "main",
+        "wakeMode":  "now",
+        "payload":  {
+                        "kind":  "systemEvent",
+                        "text":  "Run Discord daily signals pipeline: python C:\\Users\\shaowei_l\\.openclaw\\workspace\\_run_daily_signals.py"
+                    },
+        "state":  {
+                      "nextRunAtMs":  1794283200000,
+                      "lastRunAtMs":  1794024000059,
+                      "lastRunStatus":  "error",
+                      "lastStatus":  "error",
+                      "lastDurationMs":  62,
+                      "lastDeliveryStatus":  "not-requested",
+                      "lastFailureNotificationDeliveryStatus":  "not-requested",
+                      "consecutiveErrors":  1,
+                      "consecutiveSkipped":  0,
+                      "lastError":  "System event queue is full (20 pending). Let the session process pending events before retrying the notification.",
+                      "lastDiagnostics":  {
+                                              "summary":  "System event queue is full (20 pending). Let the session process pending events before retrying the notification.",
+                                              "entries":  [
+                                                              {
+                                                                  "ts":  1794024000121,
+                                                                  "source":  "cron-setup",
+                                                                  "severity":  "error",
+                                                                  "message":  "System event queue is full (20 pending). Let the session process pending events before retrying the notification."
+                                                              }
+                                                          ]
+                                          },
+                      "lastDiagnosticSummary":  "System event queue is full (20 pending). Let the session process pending events before retrying the notification."
+                  },
+        "updatedAtMs":  1794024000121,
+        "configRevision":  "sha256:r7X6DXSJbzjZvc5fy_TXEbsZ7ukXCIc0OqfGepncGjU",
+        "nextRunAtMs":  1794283200000,
+        "lastRunAtMs":  1794024000059,
+        "lastRunStatus":  "error",
+        "lastRunError":  "System event queue is full (20 pending). Let the session process pending events before retrying the notification.",
+        "lastDeliveryStatus":  "not-requested",
+        "lastFailureNotificationDeliveryStatus":  "not-requested",
+        "effectiveAgentId":  "main",
+        "status":  "error"
+    }
+]

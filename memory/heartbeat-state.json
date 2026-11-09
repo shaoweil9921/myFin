@@ -1,14 +1,15 @@
 {
   "lastChecks": {
     "openclaw_version": 1793970300,
-    "discord": 1793970300,
+    "discord": 1794070933.780317,
     "discord_signals_last": "2026-11-05",
     "email": 1793970300,
     "calendar": 1793970300,
     "nvda_signal": 1793970300,
-    "alpaca_positions": "2026-11-06T16:05",
-    "stock_watchlist": "2026-11-06T16:05",
-    "memory_maintenance": "2026-11-06T08:10"
+    "alpaca_positions": "2026-11-08T20:00",
+    "stock_watchlist": "2026-11-08T12:00",
+    "memory_maintenance": "2026-11-08T08:00",
+    "itmc_extraction": "2026-11-08T20:15"
   },
   "2026-10-19T10:40": {
     "openclaw_version": "2026.10.5 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â NEW (2026.10.4ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢2026.10.5), version state updated. Telegram alert FAILED (message tool error)",
@@ -609,7 +610,7 @@
     "cron_health": "OK - all enabled jobs lastRunStatus=ok (15 listed, none failing)",
     "alerts": []
   },
-  "lastHeartbeat": "2026-11-07T08:03",
+  "lastHeartbeat": "2026-11-08T20:15",
   "2026-11-03T14:03": {
     "time": "2026-11-03T14:03",
     "alpaca_positions": "NO_POSITIONS - 0 positions; equity 100511.88, buying_power 402047.52, ALERTS: []",
@@ -913,6 +914,81 @@
     "email": "SKIP - no mail cmdlet",
     "calendar": "SKIP - google_calendar module not installed",
     "memory_maintenance": "OK - created memory/2026-11-07.md; MEMORY.md unchanged",
+    "alerts": []
+  },
+  "2026-11-07T12:00": {
+    "time": "2026-11-07T12:00",
+    "openclaw_version": "SKIP - Saturday (weekday-only rule); npm latest 2026.11.1, installed 2026.10.5 unchanged",
+    "discord": "OK - cron handled; discord_message 186 rows max id 6729 (last 2026-11-06 21:42 ET); discord_trade_signal 145 rows max signal_date 2026-11-06; 0 new today",
+    "alpaca_positions": "NO_POSITIONS - 0 positions; equity 100511.88, buying_power 402047.52, ALERTS: [] (maintenance over, API healthy)",
+    "stock_watchlist": "SKIP - market closed (Saturday)",
+    "stock_data_update": "SKIP - market closed (weekend)",
+    "nvda_signal": "SKIP - stock_technical max date 2026-11-06 (checked 08:03 today)",
+    "email": "SKIP - no mail cmdlet",
+    "calendar": "SKIP - google_calendar module not installed",
+    "cron_health": "OK - same 2 stale errors (fc414b43 Letter Tracker, 3a3fcfed Ashley Discord Daily - systemEvent queue-full, root-caused, fix awaiting owner go-ahead); all other jobs ok",
+    "memory_maintenance": "SKIP - done 08:03 and 10:00 today; MEMORY.md unchanged",
+    "alerts": []
+  },
+  "2026-11-07T14:00": {
+    "time": "2026-11-07T14:00",
+    "alpaca_positions": "NO_POSITIONS - 0 positions; equity 100511.88, buying_power 402047.52, ALERTS: []",
+    "stock_watchlist": "SKIP - market closed (Saturday)",
+    "discord": "SKIP - cron handled; 145 signals, max signal_date 2026-11-06",
+    "db_backup": "OK - fintech_2026-11-07.sql.gz written 13:00 ET",
+    "cron_health": "2 stale errors (fc414b43, 3a3fcfed) - queue-full, already root-caused, awaiting owner go-ahead",
+    "openclaw_version": "SKIP - installed 2026.10.5, npm latest 2026.11.1 (6th day, already alerted)",
+    "memory_maintenance": "OK - appended 14:00 section to memory/2026-11-07.md",
+    "alerts": []
+  },
+  "2026-11-08T08:00": {
+    "time": "2026-11-08T08:00",
+    "alpaca_positions": "NO_POSITIONS - 0 positions; equity 100511.88, buying_power 402047.52, ALERTS: []",
+    "stock_watchlist": "SKIP - market closed (Sunday)",
+    "memory_maintenance": "OK - created memory/2026-11-08.md; MEMORY.md updated with npm latest 2026.11.2",
+    "discord": "OK - cron handled; discord_message 186 rows max id 6729, no new coach activity",
+    "nvda_signal": "SKIP - stock_technical max date 2026-11-06",
+    "openclaw_version": "installed 2026.10.5, npm latest 2026.11.2 (moved from 2026.11.1); owner action",
+    "cron_health": "OK except 2 known stale errors (fc414b43, 3a3fcfed - system event queue full); root-caused, awaiting owner go-ahead",
+    "alerts": []
+  },
+  "2026-11-08T12:00": {
+    "time": "2026-11-08T12:00",
+    "alpaca_positions": "NO_POSITIONS - 0 positions; equity 100511.88, buying_power 402047.52, ALERTS: []",
+    "stock_watchlist": "SKIP - market closed (Sunday)",
+    "memory_maintenance": "SKIP - done 08:00 and 10:00 today; MEMORY.md unchanged",
+    "openclaw_version": "SKIP - npm latest 2026.11.2 unchanged, installed 2026.10.5 (owner action)",
+    "discord": "SKIP - cron handles Mon-Fri; no new coach activity over the weekend",
+    "cron_health": "OK except 2 known stale errors (fc414b43, 3a3fcfed - system event queue full); next runs Mon 11-09, no data gap",
+    "alerts": []
+  },
+  "2026-11-08T14:00": {
+    "time": "2026-11-08T14:00",
+    "alpaca_positions": "NO_POSITIONS - 0 positions; equity 100511.88, buying_power 402047.52, ALERTS: []",
+    "stock_watchlist": "SKIP - market closed (Sunday)",
+    "discord": "SKIP - cron handled; max signal_date 2026-11-06 (634 signals), discord_message max id 6729",
+    "cron_health": "2 stale errors unchanged since 11-06 (fc414b43 Letter Tracker + 3a3fcfed Ashley Discord Daily) - next runs Mon 11-09; all other enabled jobs ok",
+    "openclaw_version": "SKIP - installed 2026.10.5, npm latest 2026.11.2; owner action",
+    "memory_maintenance": "SKIP - done 08:00 today",
+    "alerts": []
+  },
+  "2026-11-08T16:00": {
+    "time": "2026-11-08T16:00",
+    "alpaca_positions": "NO_POSITIONS - 0 positions; equity 100511.88, buying_power 402047.52, ALERTS: []",
+    "stock_watchlist": "SKIP - market closed (Sunday)",
+    "memory_maintenance": "SKIP - done 08:00 today, MEMORY.md unchanged",
+    "alerts": []
+  },
+  "2026-11-08T20:00": {
+    "time": "2026-11-08T20:00",
+    "alpaca_positions": "NO_POSITIONS - 0 positions; equity 100511.88, buying_power 402047.52, ALERTS: []",
+    "stock_watchlist": "SKIP - market closed (Sunday)",
+    "discord": "SKIP - cron handles Mon-Fri; no new coach activity over the weekend (max signal_date 2026-11-06, discord_message max id 6729)",
+    "nvda_signal": "SKIP - stock_technical max date 2026-11-06 (NVDA close 186.64, RSI 30.76, BEARISH)",
+    "openclaw_version": "SKIP - installed 2026.10.5, npm latest 2026.11.2; owner action",
+    "cron_health": "ITMC Letter Extraction (c125cd06) fired 20:00 ET but WEDGED: status=running for 7+ min with no run record, target session agent:main:main has not taken a turn since 11-06 - same systemEvent+main queue-saturation shape as fc414b43/3a3fcfed. All other enabled jobs ok",
+    "itmc": "DONE (manual) - 2026-11-08 ITMC letter extracted: DOCU/FISV/OKTA/PLTR/SG/TJX, exp 2026-11-13, 6 positions, target 150%; letter_id=9 release_id=23, release status extracted; double-pass image verification agreed exactly; telegram summary sent; browser stopped",
+    "memory_maintenance": "OK - appended 20:00 section to memory/2026-11-08.md",
     "alerts": []
   }
 }
