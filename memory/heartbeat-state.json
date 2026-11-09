@@ -9,35 +9,36 @@
     "alpaca_positions": "2026-11-08T20:00",
     "stock_watchlist": "2026-11-08T12:00",
     "memory_maintenance": "2026-11-08T08:00",
-    "itmc_extraction": "2026-11-08T20:15"
+    "itmc_extraction": "2026-11-08T20:25",
+    "cron_fix": "2026-11-08T20:25"
   },
   "2026-10-19T10:40": {
-    "openclaw_version": "2026.10.5 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â NEW (2026.10.4ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢2026.10.5), version state updated. Telegram alert FAILED (message tool error)",
-    "discord": "SKIP ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â discord_fetch_signals.py not found in workspace",
-    "alpaca_positions": "NO_POSITIONS ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â no open positions",
-    "nvda_signal": "SKIP ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â DB 10.0.0.10 unreachable (connection timed out)",
-    "email": "SKIP ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â no Exchange/Outlook cmdlets available",
-    "calendar": "SKIP ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â no calendar cmdlet available"
+    "openclaw_version": "2026.10.5 ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â NEW (2026.10.4ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢2026.10.5), version state updated. Telegram alert FAILED (message tool error)",
+    "discord": "SKIP ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â discord_fetch_signals.py not found in workspace",
+    "alpaca_positions": "NO_POSITIONS ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â no open positions",
+    "nvda_signal": "SKIP ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â DB 10.0.0.10 unreachable (connection timed out)",
+    "email": "SKIP ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â no Exchange/Outlook cmdlets available",
+    "calendar": "SKIP ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â no calendar cmdlet available"
   },
   "2026-10-19T14:40": {
-    "openclaw_version": "SKIP ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â already on 2026.10.5, checked today",
+    "openclaw_version": "SKIP ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â already on 2026.10.5, checked today",
     "alpaca_positions": "NO_POSITIONS",
-    "nvda_signal": "SKIP ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â DB 10.0.0.10 unreachable",
+    "nvda_signal": "SKIP ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â DB 10.0.0.10 unreachable",
     "email": "SKIP",
     "calendar": "SKIP"
   },
   "2026-10-20T10:40": {
-    "openclaw_version": "SKIP ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â already on 2026.10.5",
-    "discord": "SKIP ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â discord_fetch_signals.py not found",
+    "openclaw_version": "SKIP ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â already on 2026.10.5",
+    "discord": "SKIP ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â discord_fetch_signals.py not found",
     "alpaca_positions": "NO_POSITIONS",
-    "nvda_signal": "SKIP ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â DB 10.0.0.10 unreachable",
+    "nvda_signal": "SKIP ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â DB 10.0.0.10 unreachable",
     "email": "SKIP",
     "calendar": "SKIP"
   },
   "2026-10-20T14:40": {
-    "openclaw_version": "SKIP ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â already on 2026.10.5",
-    "alpaca_positions": "NO_POSITIONS ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â buying_power=$402k, equity=$100k, no open positions",
-    "nvda_signal": "SKIP ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â DB 10.0.0.10 still unreachable (connection timed out)",
+    "openclaw_version": "SKIP ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â already on 2026.10.5",
+    "alpaca_positions": "NO_POSITIONS ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â buying_power=$402k, equity=$100k, no open positions",
+    "nvda_signal": "SKIP ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â DB 10.0.0.10 still unreachable (connection timed out)",
     "email": "SKIP",
     "calendar": "SKIP"
   },
@@ -610,7 +611,7 @@
     "cron_health": "OK - all enabled jobs lastRunStatus=ok (15 listed, none failing)",
     "alerts": []
   },
-  "lastHeartbeat": "2026-11-08T20:15",
+  "lastHeartbeat": "2026-11-08T20:25",
   "2026-11-03T14:03": {
     "time": "2026-11-03T14:03",
     "alpaca_positions": "NO_POSITIONS - 0 positions; equity 100511.88, buying_power 402047.52, ALERTS: []",
@@ -989,6 +990,18 @@
     "cron_health": "ITMC Letter Extraction (c125cd06) fired 20:00 ET but WEDGED: status=running for 7+ min with no run record, target session agent:main:main has not taken a turn since 11-06 - same systemEvent+main queue-saturation shape as fc414b43/3a3fcfed. All other enabled jobs ok",
     "itmc": "DONE (manual) - 2026-11-08 ITMC letter extracted: DOCU/FISV/OKTA/PLTR/SG/TJX, exp 2026-11-13, 6 positions, target 150%; letter_id=9 release_id=23, release status extracted; double-pass image verification agreed exactly; telegram summary sent; browser stopped",
     "memory_maintenance": "OK - appended 20:00 section to memory/2026-11-08.md",
+    "alerts": []
+  },
+  "2026-11-08T20:25": {
+    "time": "2026-11-08T20:25",
+    "cron_health": "FIXED - all systemEvent+main jobs converted to isolated. Letter Tracker fc414b43 -> command+isolated, Ashley Discord Daily 3a3fcfed -> command+isolated, fintech-db-backup 46f8450f -> command+isolated, fintech-db-backup-monitor 4c124fed -> agentTurn+isolated, ITMC -> agentTurn+isolated. Zero enabled jobs remain on systemEvent+main.",
+    "itmc_job": "Old c125cd06 was WEDGED (status=running forever, no run record, in-memory reservation). cron rm + recreate under new id 4abcd3c1-b9e6-4b3d-af45-efe1421e018d.",
+    "verification": "All 4 converted jobs were actually run: fc414b43 ok/exit0, 3a3fcfed ok/exit0, 46f8450f ok/exit0 (wrote fintech_2026-11-08.sql.gz), 4c124fed ok/exit0. Artifacts verified.",
+    "artifacts": [
+      "docs/cron_job_registry.md (new authoritative registry)",
+      "_cron_patch.py (new helper: apply cron.update patch via Python)",
+      "_cron_inspect.py (new helper: dump job.state + cron_run_receipts)"
+    ],
     "alerts": []
   }
 }
