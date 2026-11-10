@@ -30,6 +30,11 @@ position could not be priced instead of silently reporting n/a.
 import re
 from datetime import date, datetime, timedelta
 
+try:
+    from cboe_chain import cboe_contract
+except Exception:  # pragma: no cover - CBOE helper optional
+    cboe_contract = None
+
 # US equity tickers: 1-5 letters, optionally with a class suffix (BRK.B).
 _TICKER_RE = re.compile(r"^[A-Z]{1,5}(?:[.-][A-Z]{1,2})?$")
 
@@ -229,10 +234,23 @@ def validate_against_chain(yf, ticker, strike, expiration, otype):
             continue
 
     available = sorted({round(float(x), 2) for x in table["strike"]})
+
+    # yfinance's chain is NOT complete. It silently omits strikes that are
+    # listed and trading elsewhere (e.g. OKTA 2026-11-13 $157.50 call: live
+    # on CBOE with 22 OI, absent from yfinance's call chain). Before calling a
+    # contract invalid, confirm against the full CBOE chain. A contract that
+    # neither source lists really is invalid.
+    if cboe_contract is not None:
+        try:
+            if cboe_contract(t, expiration, target, is_call):
+                return True, ""
+        except Exception:
+            pass
+
     shown = ", ".join(str(x) for x in available[:12])
     return False, (
         f"strike {target} is not listed for {t} {expiration} "
-        f"(listed: {shown}{'...' if len(available) > 12 else ''})"
+        f"(yfinance listed: {shown}{'...' if len(available) > 12 else ''})"
     )
 
 

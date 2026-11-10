@@ -13,11 +13,31 @@ from _db_pw import DB_CONFIG
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from option_validation import validate_option, occ_symbol
+from cboe_chain import cboe_quote
 
 DB = DB_CONFIG
 
 def db():
     return psycopg2.connect(**DB)
+
+def cboe_opt(ticker, strike, exp, otype):
+    """Quote from the CBOE delayed chain (bid/ask mid).
+
+    CBOE carries the full listed chain; yfinance omits strikes, and the
+    tracker's `current_price` column is the mark the letter P&L is
+    computed from. Prefer CBOE, fall back to Alpaca/yfinance.
+    """
+    try:
+        q = cboe_quote(ticker, exp, strike, otype)
+        if not q:
+            return None
+        bid, ask = q.get('bid', 0), q.get('ask', 0)
+        if bid > 0 and ask > 0:
+            return (bid + ask) / 2
+        return q.get('last') or None
+    except Exception:
+        return None
+
 
 def yf_opt(ticker, strike, exp, otype):
     """Quote a Yahoo option symbol. Assumes the symbol was already validated."""
@@ -131,7 +151,9 @@ def update_open(conn, today):
 
         opt_price = None
         if not expired:
-            opt_price = alpaca_opt(ticker, float(strike), exp, otype) or yf_opt(ticker, float(strike), exp, otype)
+            opt_price = (cboe_opt(ticker, float(strike), exp, otype)
+                         or alpaca_opt(ticker, float(strike), exp, otype)
+                         or yf_opt(ticker, float(strike), exp, otype))
         pnl = ((opt_price - ep) / ep * 100) if opt_price else 0.0
         hit = pnl >= float(target_pct)
         cur = conn.cursor()
